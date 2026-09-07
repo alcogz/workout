@@ -317,7 +317,15 @@ function round5(n){ return Math.max(10, Math.round(n/5)*5); }
 
 function exState(id){
   if(!S.exState[id]) S.exState[id] = {load: EX[id].start, streak:0, fails:0};
-  return S.exState[id];
+  const s = S.exState[id];
+  /* rep targets live in saved state, not the program constant, so that
+     progression on planks and bodyweight work survives a page reload */
+  if(s.lo === undefined){ s.lo = EX[id].lo; s.hi = EX[id].hi; }
+  return s;
+}
+function seedStates(){
+  Object.keys(EX).forEach(exState);
+  Object.keys(CARDIO).forEach(id => { if(!CARDIO[id].fixed) cardioState(id); });
 }
 function cardioState(id){
   if(!S.cardioState[id]) S.cardioState[id] = {level: CARDIO[id].start};
@@ -350,14 +358,15 @@ function evaluate(session){
       }
       const rpes = sets.map(s => s.rpe).filter(Boolean);
       const avgRpe = rpes.length ? rpes.reduce((a,b)=>a+b,0)/rpes.length : 0;
-      const allTop = sets.length >= d.sets && sets.every(s => s.reps >= d.hi);
-      const anyLow = sets.some(s => s.reps < d.lo);
+      const allTop = sets.length >= d.sets && sets.every(s => s.reps >= st.hi);
+      const anyLow = sets.some(s => s.reps < st.lo);
 
       if(allTop && (!avgRpe || avgRpe <= 8)){
         st.fails = 0;
         if(d.bw || d.hold){
-          changes.push({t:'up', txt:`${d.name} — target moves to ${d.hi + (d.hold?10:2)}${d.hold?'s':' reps'}.`});
-          d.lo = d.hi; d.hi = d.hi + (d.hold?10:2);
+          const step = d.hold ? 10 : 2;
+          st.lo = st.hi; st.hi = st.hi + step;
+          changes.push({t:'up', txt:`${d.name} — target moves to ${st.hi}${d.hold?'s':' reps'}.`});
         } else {
           st.load = st.load + d.inc;
           changes.push({t:'up', txt:`${d.name} → ${st.load} lb next time.`});
@@ -365,7 +374,9 @@ function evaluate(session){
       } else if(anyLow){
         st.fails++;
         if(st.fails >= 2 && !d.bw && !d.hold){
-          st.load = round5(st.load * 0.9);
+          /* a flat 10% rounds back to the same number at light loads,
+             so guarantee at least one increment down, floored at 10 lb */
+          st.load = Math.max(10, Math.min(st.load - d.inc, round5(st.load * 0.9)));
           st.fails = 0;
           changes.push({t:'down', txt:`${d.name} backed off to ${st.load} lb after two short sessions.`});
         }
@@ -442,10 +453,11 @@ function renderToday(){
     h += `<div class="sec"><h2>What's queued</h2>`;
     day.items.forEach(it => h += rowHTML(it, false));
     h += `</div>`;
-    h += `<div class="btnrow">
-            <button class="btn" onclick="startSession()">Start session</button>
-            <button class="btn ghost slim" onclick="skipDay()">Different day</button>
-          </div>`;
+    h += `<div class="f" style="margin-top:14px"><label>Training a different day?</label>
+            <select onchange="pickDay(this.value)">
+              ${DAYS.map(d => `<option value="${d.id}" ${d.id===S.nextDay?'selected':''}>Day ${d.id+1} — ${d.title}</option>`).join('')}
+            </select></div>`;
+    h += `<div class="btnrow"><button class="btn" onclick="startSession()">Start session</button></div>`;
   } else {
     const doneIdx = new Set(S.live.entries.map(e => e.idx));
     h += `<div class="sec"><h2>In progress</h2>`;
@@ -479,7 +491,7 @@ function itemMeta(it){
   }
   const d = EX[it.ex], st = exState(it.ex);
   const load = d.bw ? 'body weight' : (d.hold ? '' : `${st.load} lb`);
-  const target = d.hold ? `${d.lo}–${d.hi}s` : `${d.lo}–${d.hi}`;
+  const target = d.hold ? `${st.lo}–${st.hi}s` : `${st.lo}–${st.hi}`;
   return {
     name: d.name,
     rx: `${d.sets} × ${target}${load ? ' · ' + load : ''}`,
@@ -535,8 +547,9 @@ function logPanel(it, idx){
     <button class="btn ghost slim" onclick="closeItem()">Back</button></div>`;
   } else {
     const d = it.calf ? null : EX[it.ex];
-    const defW = d && !d.bw && !d.hold ? exState(it.ex).load : '';
-    const defR = it.calf ? CALF_STAGES[S.calf.stage].reps : (d.hold ? d.hi : d.hi);
+    const st = it.calf ? null : exState(it.ex);
+    const defW = d && !d.bw && !d.hold ? st.load : '';
+    const defR = it.calf ? CALF_STAGES[S.calf.stage].reps : st.hi;
     h += `<div class="grid3" style="margin-top:12px">
       <div class="f"><label>${d && d.hold ? 'Seconds' : 'Weight (lb)'}</label><input id="i-w" type="number" inputmode="decimal" value="${defW}" placeholder="${d&&d.bw?'—':''}"></div>
       <div class="f"><label>${d && d.hold ? 'Hold (s)' : 'Reps'}</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
@@ -567,8 +580,8 @@ function startSession(){
   S.live = {date: today(), dayId: S.nextDay, entries: [], openIdx: null, lastSetAt: null, startedAt: Date.now()};
   persist(); renderToday();
 }
-function skipDay(){
-  S.nextDay = (S.nextDay + 1) % DAYS.length;
+function pickDay(v){
+  S.nextDay = parseInt(v);
   persist(); renderToday();
 }
 function cancelSession(){
@@ -767,7 +780,53 @@ function renderProgress(){
   });
   h += `</div>`;
 
+  /* --- session history --- */
+  h += `<div class="sec"><h2>Session history</h2>`;
+  if(!S.sessions.length){
+    h += `<div class="empty">Finished sessions land here, with every set you logged.</div>`;
+  } else {
+    [...S.sessions].reverse().forEach((s, i) => {
+      const idx = S.sessions.length - 1 - i;
+      h += `<div class="row" onclick="toggleSession(${idx})" role="button" tabindex="0">
+        <div class="row-top">
+          <span class="row-name">Day ${s.dayId+1} — ${esc(DAYS[s.dayId].title)}</span>
+          <span class="row-rx">${fmtDate(s.date)}</span>
+        </div>
+        <div class="row-detail">${s.minutes} min · ${Math.round(s.volume).toLocaleString()} lb volume · tap for sets</div>`;
+      if(openSession === idx) h += sessionDetail(s);
+      h += `</div>`;
+    });
+  }
+  h += `</div>`;
+
   el('v-progress').innerHTML = h;
+}
+
+let openSession = null;
+function toggleSession(i){
+  openSession = (openSession === i) ? null : i;
+  renderProgress();
+}
+function sessionDetail(s){
+  let h = '<div style="margin-top:10px">';
+  s.entries.forEach(en => {
+    const name = en.kind === 'calf' ? 'Calf protocol'
+      : (en.kind === 'cardio' ? CARDIO[en.cardioId].name : EX[en.exId].name);
+    h += `<div style="margin-top:10px"><div class="row-name" style="font-size:14px">${esc(name)}</div>`;
+    h += `<table class="sets"><tbody>`;
+    en.sets.forEach((st, i) => {
+      if(en.kind === 'cardio'){
+        h += `<tr><td>Completed${st.level!=null?' at '+st.level:''}</td><td>${st.rpe?'RPE '+st.rpe:''}</td></tr>`;
+      } else {
+        h += `<tr><td>${i+1}</td><td>${st.weight||'—'} lb</td><td>${st.reps} reps</td>
+          <td>${st.rpe?'RPE '+st.rpe:'—'}</td><td>${st.tempo||'—'}</td><td>${st.rest?st.rest+'s':'—'}</td>
+          ${st.pain?'<td class="flag">pain</td>':'<td></td>'}</tr>`;
+      }
+      if(st.notes) h += `<tr><td colspan="7" class="row-detail">${esc(st.notes)}</td></tr>`;
+    });
+    h += `</tbody></table></div>`;
+  });
+  return h + '</div>';
 }
 
 function barHTML(side, val, max, cls, unit){
@@ -886,6 +945,8 @@ document.querySelectorAll('nav button').forEach(b => {
 (async function(){
   S = await Store.load() || blank();
   if(!S.calf) S.calf = {stage:0, streak:0, lastPain:null};
+  seedStates();
+  persist();
   renderAll();
 })();
 </script>
