@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset the app cache</title>
+<style>
+body{
+  margin:0;padding:32px 20px;background:#E4E5E0;color:#1E2427;
+  font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;line-height:1.5;
+  max-width:560px;margin:0 auto;
+}
+h1{font-size:22px;letter-spacing:-0.02em;margin:0 0 6px}
+p{font-size:15px;color:#6B7370;margin:0 0 16px}
+button{
+  border:0;background:#1E2427;color:#E4E5E0;font:inherit;font-weight:600;
+  padding:15px 20px;width:100%;border-radius:4px;font-size:16px;cursor:pointer;
+}
+button:disabled{opacity:.5}
+#log{
+  margin-top:22px;font-size:14px;background:#EDEEE9;border:1px solid #C6C8C1;
+  border-radius:4px;padding:14px;white-space:pre-wrap;min-height:60px;
+}
+.ok{color:#3E6B52;font-weight:600}
+a{color:#1F5673}
+</style>
+</head>
+<body>
+<h1>Reset the app cache</h1>
+<p>This clears the stuck offline copy of the workout app. Your logged sessions, measurements and playlists are stored separately and are not touched.</p>
+
+<button id="go">Clear the cache</button>
+<div id="log">Ready.</div>
+
+<script>
+const log = document.getElementById('log');
+const say = t => { log.textContent += '\n' + t; };
+
+document.getElementById('go').onclick = async () => {
+  const btn = document.getElementById('go');
+  btn.disabled = true;
+  log.textContent = 'Working...';
+
+  // prove the data is still there before and after
+  let before = 0;
+  try { before = (localStorage.getItem('rebuild.v1') || '').length; } catch(e){}
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      say(regs.length ? `Found ${regs.length} service worker(s).` : 'No service workers registered.');
+      for (const r of regs) { await r.unregister(); }
+      if (regs.length) say('Unregistered.');
+    }
+  } catch(e) { say('Service worker step failed: ' + e.message); }
+
+  try {
+    if (window.caches) {
+      const keys = await caches.keys();
+      say(keys.length ? `Found caches: ${keys.join(', ')}` : 'No caches found.');
+      for (const k of keys) { await caches.delete(k); }
+      if (keys.length) say('Caches deleted.');
+    }
+  } catch(e) { say('Cache step failed: ' + e.message); }
+
+  let after = 0;
+  try { after = (localStorage.getItem('rebuild.v1') || '').length; } catch(e){}
+  say(after === before
+    ? `Your data is untouched (${after} bytes).`
+    : `Warning: stored data changed (${before} to ${after} bytes).`);
+
+  say('\nDone. Now close this tab, fully quit the app from the app switcher, and reopen it.');
+  log.insertAdjacentHTML('beforeend',
+    '\n\n<a href="./">Open the app</a>');
+  btn.textContent = 'Cleared';
+};
+</script>
+</body>
+</html>
