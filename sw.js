@@ -1,6 +1,6 @@
 /* Rebuild — offline cache.
    Bump CACHE when you change index.html so phones pick up the new version. */
-const CACHE = 'rebuild-v2';
+const CACHE = 'rebuild-v3';
 const ASSETS = ['./', './index.html'];
 
 self.addEventListener('install', e => {
