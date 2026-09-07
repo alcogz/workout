@@ -80,6 +80,11 @@ main{padding:var(--pad) var(--pad) 8px;max-width:640px;margin:0 auto}
 .row-name{font-weight:600;font-size:15.5px;letter-spacing:-0.01em}
 .row-rx{font-size:14px;color:var(--muted);white-space:nowrap}
 .row-detail{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
+.demo{
+  display:inline-block;margin-top:7px;font-size:12.5px;color:var(--left);
+  text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;
+}
+.demo:hover{color:var(--ink)}
 
 /* ---------- buttons ---------- */
 button{border:0;background:none;cursor:pointer;border-radius:4px}
@@ -232,9 +237,11 @@ const CALF_STAGES = [
 const EX = {
   db_bench:   {name:'Flat dumbbell bench press', lo:8, hi:12, sets:3, start:20, inc:5},
   db_incline: {name:'Incline dumbbell press', lo:8, hi:12, sets:3, start:15, inc:5},
-  db_ohp:     {name:'Seated dumbbell shoulder press', lo:8, hi:12, sets:3, start:15, inc:5},
+  db_ohp:     {name:'High-incline dumbbell press', lo:8, hi:12, sets:3, start:15, inc:5,
+               note:'Bench at 75°, one notch back from vertical. Press up and slightly forward — this clears a 7 ft ceiling where a straight overhead press will not.'},
   db_lat:     {name:'Dumbbell lateral raise', lo:12, hi:15, sets:3, start:10, inc:5},
-  db_tri:     {name:'Overhead dumbbell triceps extension', lo:10, hi:15, sets:3, start:15, inc:5},
+  db_tri:     {name:'Lying dumbbell triceps extension', lo:10, hi:15, sets:3, start:15, inc:5,
+               note:'Flat on the bench, lower toward your forehead. Keeps the whole path below chest height.'},
 
   db_goblet:  {name:'Goblet squat', lo:8, hi:12, sets:3, start:25, inc:5},
   db_rdl:     {name:'Dumbbell Romanian deadlift', lo:8, hi:12, sets:3, start:25, inc:5},
@@ -257,24 +264,66 @@ const EX = {
 };
 
 const DAYS = [
-  {id:0, title:'Upper push', items:[
+  {id:0, day:'Monday', title:'Upper push', items:[
     {ex:'db_bench'},{ex:'db_incline'},{ex:'db_ohp'},{ex:'db_lat'},{ex:'db_tri'},
     {cardio:'walk_easy'}
   ]},
-  {id:1, title:'Lower + calf', items:[
+  {id:1, day:'Tuesday', title:'Lower + calf', items:[
     {ex:'db_goblet'},{ex:'db_rdl'},{ex:'db_split'},{calf:true},{ex:'plank'}
   ]},
-  {id:2, title:'Conditioning + core', items:[
+  {id:2, day:'Wednesday', title:'Rest', rest:true, items:[],
+   note:'Nothing scheduled. Walk if you feel like it, but keep it easy — this gap sits between your two calf sessions on purpose.'},
+  {id:3, day:'Thursday', title:'Conditioning + core', items:[
     {cardio:'max5'},{ex:'deadbug'},{ex:'sideplank'},{ex:'birddog'}
   ]},
-  {id:3, title:'Upper pull', items:[
+  {id:4, day:'Friday', title:'Upper pull', items:[
     {ex:'db_row'},{ex:'db_csrow'},{ex:'db_rear'},{ex:'db_curl'},{ex:'db_shrug'},
     {cardio:'walk_easy'}
   ]},
-  {id:4, title:'Lower + treadmill', items:[
+  {id:5, day:'Saturday', title:'Lower + treadmill', items:[
     {ex:'db_hip'},{ex:'db_rev'},{ex:'db_scalf'},{calf:true},{cardio:'treadmill'}
-  ]}
+  ]},
+  {id:6, day:'Sunday', title:'Rest', rest:true, items:[],
+   note:'Full day off. If the Achilles is stiffer this morning than it was Saturday morning, that is worth noticing before Tuesday comes around.'}
 ];
+
+/* YouTube search links rather than fixed video IDs — searches never rot,
+   and they surface current demonstrations instead of one frozen clip. */
+const DEMO_Q = {
+  db_bench:'flat dumbbell bench press proper form',
+  db_incline:'incline dumbbell press proper form',
+  db_ohp:'high incline dumbbell press 75 degree form',
+  db_lat:'dumbbell lateral raise proper form',
+  db_tri:'lying dumbbell triceps extension form',
+  db_goblet:'goblet squat proper form',
+  db_rdl:'dumbbell romanian deadlift form',
+  db_split:'dumbbell split squat proper form',
+  plank:'front plank proper form',
+  deadbug:'dead bug exercise proper form',
+  sideplank:'side plank proper form',
+  birddog:'bird dog exercise proper form',
+  db_row:'one arm dumbbell row proper form',
+  db_csrow:'chest supported dumbbell row incline bench',
+  db_rear:'dumbbell rear delt fly form',
+  db_curl:'dumbbell bicep curl proper form',
+  db_shrug:'dumbbell shrug proper form',
+  db_hip:'dumbbell hip thrust bench form',
+  db_rev:'dumbbell reverse lunge proper form',
+  db_scalf:'seated dumbbell calf raise form'
+};
+const CALF_Q = [
+  'double leg heel raise achilles rehab',
+  'eccentric single leg heel raise achilles rehab',
+  'assisted single leg calf raise achilles rehab',
+  'single leg heel raise achilles tendon rehab'
+];
+const CARDIO_Q = {
+  max5:'bowflex max trainer interval workout',
+  treadmill:'treadmill incline walking workout form',
+  walk_easy:''
+};
+const demoURL = q => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
+const mondayIndex = () => (new Date().getDay() + 6) % 7;
 
 const CARDIO = {
   max5:      {name:'Max Trainer intervals', unit:'intervals', start:6, inc:1, cap:12,
@@ -434,12 +483,20 @@ function testDue(){
   return daysBetween(last, today()) >= 21;
 }
 
+function lastCalfSession(){
+  for(let i = S.sessions.length - 1; i >= 0; i--){
+    if(S.sessions[i].entries.some(e => e.kind === 'calf')) return S.sessions[i];
+  }
+  return null;
+}
+
 function renderToday(){
   const v = el('v-today');
+  if(S.nextDay === null || S.nextDay === undefined) S.nextDay = mondayIndex();
   const day = DAYS[S.live ? S.live.dayId : S.nextDay];
   let h = '';
 
-  h += `<div class="h">Day ${day.id+1} — ${day.title}</div>`;
+  h += `<div class="h">${day.day} — ${day.title}</div>`;
   h += `<div class="sub">${S.sessions.length} sessions logged${S.calf.lastPain ? ' · calf pain last flagged ' + fmtDate(S.calf.lastPain) : ''}</div>`;
 
   if(testDue()){
@@ -449,14 +506,28 @@ function renderToday(){
     h += `<div class="notice hot">Calf progression is on hold until you log two clean sessions with no pain flag. If it keeps flaring, that's a conversation for your surgeon rather than something to push through.</div>`;
   }
 
+  /* rest day */
+  if(day.rest && !S.live){
+    h += `<div class="notice good" style="margin-top:16px">${esc(day.note)}</div>`;
+    h += dayPicker();
+    v.innerHTML = h;
+    return;
+  }
+
+  /* two calf days too close together */
+  const hasCalf = day.items.some(it => it.calf);
+  if(hasCalf && !S.live){
+    const last = lastCalfSession();
+    if(last && daysBetween(last.date, today()) < 2){
+      h += `<div class="notice hot"><b>Your last calf session was ${last.date === today() ? 'today' : 'yesterday'}.</b> Tendon wants 48 to 72 hours between loading sessions. Train an upper day instead and come back to this one.</div>`;
+    }
+  }
+
   if(!S.live){
     h += `<div class="sec"><h2>What's queued</h2>`;
     day.items.forEach(it => h += rowHTML(it, false));
     h += `</div>`;
-    h += `<div class="f" style="margin-top:14px"><label>Training a different day?</label>
-            <select onchange="pickDay(this.value)">
-              ${DAYS.map(d => `<option value="${d.id}" ${d.id===S.nextDay?'selected':''}>Day ${d.id+1} — ${d.title}</option>`).join('')}
-            </select></div>`;
+    h += dayPicker();
     h += `<div class="btnrow"><button class="btn" onclick="startSession()">Start session</button></div>`;
   } else {
     const doneIdx = new Set(S.live.entries.map(e => e.idx));
@@ -480,14 +551,23 @@ function renderToday(){
   tickTimer();
 }
 
+function dayPicker(){
+  return `<div class="f" style="margin-top:16px"><label>Training something else today?</label>
+    <select onchange="pickDay(this.value)">
+      ${DAYS.map(d => `<option value="${d.id}" ${d.id===S.nextDay?'selected':''}>${d.day} — ${d.title}</option>`).join('')}
+    </select></div>`;
+}
+
 function itemMeta(it){
   if(it.calf){
     const st = CALF_STAGES[S.calf.stage];
-    return {name:`Calf protocol — ${st.name}`, rx:`${st.sets} × ${st.reps}`, detail:st.detail, track:'t-left'};
+    return {name:`Calf protocol — ${st.name}`, rx:`${st.sets} × ${st.reps}`, detail:st.detail,
+            track:'t-left', q:CALF_Q[S.calf.stage]};
   }
   if(it.cardio){
     const c = CARDIO[it.cardio], cs = c.fixed ? null : cardioState(it.cardio);
-    return {name:c.name, rx: c.fixed ? '10 min' : `${cs.level}${c.unit?' '+c.unit:''}`, detail:c.detail, track:'t-cardio'};
+    return {name:c.name, rx: c.fixed ? '10 min' : `${cs.level}${c.unit?' '+c.unit:''}`,
+            detail:c.detail, track:'t-cardio', q:CARDIO_Q[it.cardio]};
   }
   const d = EX[it.ex], st = exState(it.ex);
   const load = d.bw ? 'body weight' : (d.hold ? '' : `${st.load} lb`);
@@ -495,17 +575,21 @@ function itemMeta(it){
   return {
     name: d.name,
     rx: `${d.sets} × ${target}${load ? ' · ' + load : ''}`,
-    detail: d.perSide ? 'Each side.' : '',
-    track: d.calf ? 't-left' : ''
+    detail: [d.note, d.perSide ? 'Each side.' : ''].filter(Boolean).join(' '),
+    track: d.calf ? 't-left' : '',
+    q: DEMO_Q[it.ex]
   };
 }
 
 function rowHTML(it, done, idx){
   const m = itemMeta(it);
   const click = (idx !== undefined && S.live) ? `onclick="openItem(${idx})"` : '';
+  const link = m.q ? `<a class="demo" href="${demoURL(m.q)}" target="_blank" rel="noopener"
+                        onclick="event.stopPropagation()">Watch a demo</a>` : '';
   return `<div class="row ${m.track} ${done?'done':''}" ${click} role="${click?'button':'group'}" ${click?'tabindex="0"':''}>
     <div class="row-top"><span class="row-name">${esc(m.name)}</span><span class="row-rx">${esc(m.rx)}</span></div>
     ${m.detail ? `<div class="row-detail">${esc(m.detail)}</div>` : ''}
+    ${link}
   </div>`;
 }
 
@@ -519,6 +603,7 @@ function logPanel(it, idx){
 
   let h = `<div class="sec"><h2>Logging: ${esc(m.name)}</h2>`;
   h += `<div class="note" style="margin-top:8px">${esc(m.detail || 'Target ' + m.rx)}</div>`;
+  if(m.q) h += `<a class="demo" href="${demoURL(m.q)}" target="_blank" rel="noopener">Watch a demo</a>`;
 
   if(sets.length){
     h += `<table class="sets"><thead><tr>
@@ -640,7 +725,7 @@ function finishSession(){
   };
   const changes = evaluate(sess);
   S.sessions.push(sess);
-  S.nextDay = (S.live.dayId + 1) % DAYS.length;
+  S.nextDay = mondayIndex();
   S.live = null;
   persist();
 
@@ -789,7 +874,7 @@ function renderProgress(){
       const idx = S.sessions.length - 1 - i;
       h += `<div class="row" onclick="toggleSession(${idx})" role="button" tabindex="0">
         <div class="row-top">
-          <span class="row-name">Day ${s.dayId+1} — ${esc(DAYS[s.dayId].title)}</span>
+          <span class="row-name">${esc(DAYS[s.dayId].day)} — ${esc(DAYS[s.dayId].title)}</span>
           <span class="row-rx">${fmtDate(s.date)}</span>
         </div>
         <div class="row-detail">${s.minutes} min · ${Math.round(s.volume).toLocaleString()} lb volume · tap for sets</div>`;
@@ -877,10 +962,17 @@ function renderProgram(){
     <div class="sub">Five days, under an hour each. Dumbbells, adjustable bench, treadmill, Max Trainer.</div>`;
 
   DAYS.forEach(d => {
-    h += `<div class="sec"><h2>Day ${d.id+1} — ${d.title}</h2>`;
-    d.items.forEach(it => h += rowHTML(it, false));
+    h += `<div class="sec"><h2>${d.day} — ${d.title}</h2>`;
+    if(d.rest){
+      h += `<div class="notice good">${esc(d.note)}</div>`;
+    } else {
+      d.items.forEach(it => h += rowHTML(it, false));
+    }
     h += `</div>`;
   });
+
+  h += `<div class="sec"><h2>Working around a 7 ft ceiling</h2>
+    <div class="note" style="margin-top:8px">Nothing in this program travels above chest height while you're standing. The shoulder press is done on a 75° bench rather than vertically, and triceps work is done lying down. If you ever swap something in, check the top of the movement before you load it.</div></div>`;
 
   h += `<div class="sec"><h2>How progression works</h2>
     <div class="note" style="margin-top:8px">
@@ -945,6 +1037,8 @@ document.querySelectorAll('nav button').forEach(b => {
 (async function(){
   S = await Store.load() || blank();
   if(!S.calf) S.calf = {stage:0, streak:0, lastPain:null};
+  /* migrating from the old 5-day rotation: re-anchor to the calendar week */
+  S.nextDay = mondayIndex();
   seedStates();
   persist();
   renderAll();
