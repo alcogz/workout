@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rebuild — training log</title>
+<meta name="theme-color" content="#E4E5E0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link id="mf" rel="manifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E4E5E0;
+  --raise:#EDEEE9;
+  --sink:#DADCD5;
+  --ink:#1E2427;
+  --muted:#6B7370;
+  --rule:#C6C8C1;
+  --left:#1F5673;
+  --right:#9A6B2F;
+  --warn:#8C3A2B;
+  --ok:#3E6B52;
+  --pad:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Archivo','Helvetica Neue',Helvetica,Arial,sans-serif;
+  font-size:16px;
+  line-height:1.45;
+  font-variant-numeric:tabular-nums;
+  padding-bottom:calc(76px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,ul,ol{margin:0}
+button,input,select,textarea{font:inherit;color:inherit;font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--left);outline-offset:2px}
+
+/* ---------- header ---------- */
+header{
+  position:sticky;top:0;z-index:20;
+  background:var(--paper);
+  border-bottom:1px solid var(--rule);
+  padding:calc(10px + env(safe-area-inset-top)) var(--pad) 10px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+}
+.brand{font-weight:700;font-size:19px;letter-spacing:-0.02em}
+.brand span{font-weight:400;color:var(--muted)}
+.stamp{font-size:13px;color:var(--muted);white-space:nowrap}
+
+main{padding:var(--pad) var(--pad) 8px;max-width:640px;margin:0 auto}
+.view{display:none}
+.view.on{display:block}
+
+/* ---------- type ---------- */
+.h{font-size:22px;font-weight:700;letter-spacing:-0.02em;line-height:1.2}
+.sub{color:var(--muted);font-size:14px;margin-top:2px}
+.sec{margin-top:26px}
+.sec > h2{font-size:15px;font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.note{font-size:13.5px;color:var(--muted);line-height:1.5}
+
+/* ---------- exercise rows: left spine encodes progression track ---------- */
+.row{
+  border-left:3px solid var(--ink);
+  background:var(--raise);
+  padding:11px 12px;
+  margin-top:8px;
+  border-radius:0 4px 4px 0;
+}
+.row.t-left{border-left-color:var(--left)}
+.row.t-right{border-left-color:var(--right)}
+.row.t-cardio{border-left-color:var(--muted)}
+.row.done{background:var(--sink);opacity:.62}
+.row-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.row-name{font-weight:600;font-size:15.5px;letter-spacing:-0.01em}
+.row-rx{font-size:14px;color:var(--muted);white-space:nowrap}
+.row-detail{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
+
+/* ---------- buttons ---------- */
+button{border:0;background:none;cursor:pointer;border-radius:4px}
+.btn{
+  background:var(--ink);color:var(--paper);
+  padding:13px 18px;font-weight:600;font-size:15px;width:100%;
+}
+.btn.ghost{background:none;border:1px solid var(--rule);color:var(--ink)}
+.btn.blue{background:var(--left);color:#fff}
+.btn.slim{padding:9px 14px;font-size:14px;width:auto}
+.btn:disabled{opacity:.4}
+.btnrow{display:flex;gap:8px;margin-top:12px}
+.btnrow .btn{width:auto;flex:1}
+
+/* ---------- inputs ---------- */
+.f{display:flex;flex-direction:column;gap:3px}
+.f label{font-size:12.5px;color:var(--muted)}
+.f input,.f select,.f textarea{
+  background:var(--paper);border:1px solid var(--rule);border-radius:4px;
+  padding:10px;font-size:16px;width:100%;
+}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+.check{display:flex;align-items:center;gap:9px;font-size:14px;margin-top:10px}
+.check input{width:22px;height:22px;accent-color:var(--warn)}
+
+/* ---------- set table ---------- */
+.sets{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+.sets th{
+  text-align:left;font-weight:500;font-size:12.5px;color:var(--muted);
+  border-bottom:1px solid var(--rule);padding:0 6px 5px 0;
+}
+.sets td{padding:6px 6px 6px 0;border-bottom:1px solid var(--rule)}
+.sets tr:last-child td{border-bottom:0}
+.flag{color:var(--warn);font-weight:600}
+
+/* ---------- notices ---------- */
+.notice{
+  border:1px solid var(--rule);border-left:3px solid var(--left);
+  background:var(--raise);padding:12px;border-radius:0 4px 4px 0;
+  font-size:14px;line-height:1.5;margin-top:12px;
+}
+.notice.hot{border-left-color:var(--warn)}
+.notice.good{border-left-color:var(--ok)}
+.notice b{font-weight:600}
+
+/* ---------- the differential gauge: the app's one bold element ---------- */
+.gauge{background:var(--raise);border:1px solid var(--rule);border-radius:4px;padding:16px 14px;margin-top:12px}
+.gauge h3{font-size:14px;font-weight:600;margin-bottom:2px}
+.gauge .cap{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.bar{display:grid;grid-template-columns:34px 1fr 58px;align-items:center;gap:9px;margin-bottom:9px}
+.bar .side{font-size:13px;color:var(--muted)}
+.bar .track{height:16px;background:var(--sink);border-radius:2px;overflow:hidden}
+.bar .fill{height:100%;border-radius:2px;transition:width .45s ease}
+.bar .fill.l{background:var(--left)}
+.bar .fill.r{background:var(--right)}
+.bar .val{font-size:14px;font-weight:600;text-align:right}
+.delta{margin-top:12px;padding-top:11px;border-top:1px solid var(--rule);font-size:14px;display:flex;justify-content:space-between}
+.delta b{font-weight:700}
+
+/* ---------- chart ---------- */
+.chart{background:var(--raise);border:1px solid var(--rule);border-radius:4px;padding:14px 12px 10px;margin-top:12px}
+.chart h3{font-size:14px;font-weight:600;margin-bottom:10px}
+svg{display:block;width:100%;height:auto;overflow:visible}
+
+/* ---------- rest timer ---------- */
+.timer{
+  position:sticky;bottom:calc(72px + env(safe-area-inset-bottom));z-index:15;
+  background:var(--ink);color:var(--paper);border-radius:4px;
+  padding:11px 14px;display:flex;justify-content:space-between;align-items:center;
+  font-size:15px;margin-top:14px;
+}
+.timer b{font-size:20px;font-weight:700}
+
+/* ---------- nav ---------- */
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  background:var(--paper);border-top:1px solid var(--rule);
+  display:grid;grid-template-columns:repeat(4,1fr);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+nav button{padding:14px 4px 15px;font-size:13.5px;color:var(--muted);border-radius:0;border-top:2px solid transparent;margin-top:-1px}
+nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
+
+.empty{color:var(--muted);font-size:14px;padding:18px 0;line-height:1.5}
+.hist{border-bottom:1px solid var(--rule);padding:10px 0;font-size:14px;display:flex;justify-content:space-between;gap:10px}
+.hist:last-child{border-bottom:0}
+.hist .d{color:var(--muted);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Rebuild<span> · training log</span></div>
+  <div class="stamp" id="stamp"></div>
+</header>
+
+<main>
+  <section class="view on" id="v-today"></section>
+  <section class="view" id="v-body"></section>
+  <section class="view" id="v-progress"></section>
+  <section class="view" id="v-program"></section>
+</main>
+
+<nav>
+  <button data-v="today" class="on">Today</button>
+  <button data-v="body">Body</button>
+  <button data-v="progress">Progress</button>
+  <button data-v="program">Program</button>
+</nav>
+
+<script>
+/* =========================================================
+   STORAGE ADAPTER
+   Uses window.storage when present (Claude artifact sandbox),
+   falls back to localStorage when hosted on GitHub Pages.
+   ========================================================= */
+const Store = {
+  key: 'rebuild.v1',
+  async load(){
+    try{
+      if(window.storage){
+        const r = await window.storage.get(this.key);
+        return r && r.value ? JSON.parse(r.value) : null;
+      }
+      const v = localStorage.getItem(this.key);
+      return v ? JSON.parse(v) : null;
+    }catch(e){ return null; }
+  },
+  async save(obj){
+    const s = JSON.stringify(obj);
+    try{
+      if(window.storage){ await window.storage.set(this.key, s); return true; }
+      localStorage.setItem(this.key, s); return true;
+    }catch(e){ console.warn('save failed', e); return false; }
+  }
+};
+
+/* =========================================================
+   PROGRAM
+   ========================================================= */
+const CALF_STAGES = [
+  {name:'Heel raise — both legs', detail:'Feet flat, rise to full height, lower over 3 seconds. Hold something for balance only.', sets:3, reps:15, bilateral:true},
+  {name:'Both up, left lowers alone', detail:'Rise on both feet, lift the right foot, then lower on the left over 4 seconds.', sets:3, reps:10, bilateral:false},
+  {name:'Assisted single-leg — left', detail:'Left foot only. Fingertips on a wall taking a little weight.', sets:3, reps:8, bilateral:false},
+  {name:'Single-leg heel raise — left', detail:'Left foot only, no support, full range up and slow down.', sets:3, reps:8, bilateral:false}
+];
+
+const EX = {
+  db_bench:   {name:'Flat dumbbell bench press', lo:8, hi:12, sets:3, start:20, inc:5},
+  db_incline: {name:'Incline dumbbell press', lo:8, hi:12, sets:3, start:15, inc:5},
+  db_ohp:     {name:'Seated dumbbell shoulder press', lo:8, hi:12, sets:3, start:15, inc:5},
+  db_lat:     {name:'Dumbbell lateral raise', lo:12, hi:15, sets:3, start:10, inc:5},
+  db_tri:     {name:'Overhead dumbbell triceps extension', lo:10, hi:15, sets:3, start:15, inc:5},
+
+  db_goblet:  {name:'Goblet squat', lo:8, hi:12, sets:3, start:25, inc:5},
+  db_rdl:     {name:'Dumbbell Romanian deadlift', lo:8, hi:12, sets:3, start:25, inc:5},
+  db_split:   {name:'Dumbbell split squat', lo:8, hi:10, sets:3, start:15, inc:5, perSide:true},
+  plank:      {name:'Front plank', lo:30, hi:60, sets:3, start:0, inc:0, hold:true},
+
+  deadbug:    {name:'Dead bug', lo:8, hi:12, sets:3, start:0, inc:0, bw:true, perSide:true},
+  sideplank:  {name:'Side plank', lo:20, hi:40, sets:3, start:0, inc:0, hold:true, perSide:true},
+  birddog:    {name:'Bird dog', lo:8, hi:12, sets:3, start:0, inc:0, bw:true, perSide:true},
+
+  db_row:     {name:'One-arm dumbbell row', lo:8, hi:12, sets:3, start:25, inc:5, perSide:true},
+  db_csrow:   {name:'Chest-supported dumbbell row', lo:10, hi:12, sets:3, start:15, inc:5},
+  db_rear:    {name:'Rear delt fly', lo:12, hi:15, sets:3, start:10, inc:5},
+  db_curl:    {name:'Dumbbell curl', lo:10, hi:12, sets:3, start:15, inc:5},
+  db_shrug:   {name:'Dumbbell shrug', lo:12, hi:15, sets:3, start:30, inc:5},
+
+  db_hip:     {name:'Dumbbell hip thrust', lo:10, hi:15, sets:3, start:25, inc:5},
+  db_rev:     {name:'Dumbbell reverse lunge', lo:8, hi:10, sets:3, start:15, inc:5, perSide:true},
+  db_scalf:   {name:'Seated calf raise', lo:12, hi:15, sets:3, start:20, inc:5, calf:true}
+};
+
+const DAYS = [
+  {id:0, title:'Upper push', items:[
+    {ex:'db_bench'},{ex:'db_incline'},{ex:'db_ohp'},{ex:'db_lat'},{ex:'db_tri'},
+    {cardio:'walk_easy'}
+  ]},
+  {id:1, title:'Lower + calf', items:[
+    {ex:'db_goblet'},{ex:'db_rdl'},{ex:'db_split'},{calf:true},{ex:'plank'}
+  ]},
+  {id:2, title:'Conditioning + core', items:[
+    {cardio:'max5'},{ex:'deadbug'},{ex:'sideplank'},{ex:'birddog'}
+  ]},
+  {id:3, title:'Upper pull', items:[
+    {ex:'db_row'},{ex:'db_csrow'},{ex:'db_rear'},{ex:'db_curl'},{ex:'db_shrug'},
+    {cardio:'walk_easy'}
+  ]},
+  {id:4, title:'Lower + treadmill', items:[
+    {ex:'db_hip'},{ex:'db_rev'},{ex:'db_scalf'},{calf:true},{cardio:'treadmill'}
+  ]}
+];
+
+const CARDIO = {
+  max5:      {name:'Max Trainer intervals', unit:'intervals', start:6, inc:1, cap:12,
+              detail:'30 seconds hard, 90 seconds easy. Effort should top out around 8 out of 10.'},
+  treadmill: {name:'Incline walk', unit:'% incline', start:3, inc:0.5, cap:12,
+              detail:'20 minutes at a brisk walk. Incline goes up before speed does.'},
+  walk_easy: {name:'Easy walk to finish', unit:'', start:0, inc:0, cap:0, fixed:true,
+              detail:'10 minutes flat, conversational pace.'}
+};
+
+const BODY_FIELDS = [
+  ['weight','Body weight (lb)'],['chest','Chest'],['waist','Waist'],['hips','Hips'],
+  ['armL','Left arm'],['armR','Right arm'],['thighL','Left thigh'],['thighR','Right thigh'],
+  ['calfL','Left calf'],['calfR','Right calf']
+];
+
+/* =========================================================
+   STATE
+   ========================================================= */
+let S = null;
+const blank = () => ({
+  started: today(),
+  exState: {},
+  calf: {stage:0, streak:0, lastPain:null},
+  cardioState: {},
+  sessions: [],
+  body: [],
+  tests: [],
+  live: null,
+  nextDay: 0
+});
+
+function today(){ return new Date().toISOString().slice(0,10); }
+function fmtDate(d){
+  const [y,m,dd] = d.split('-');
+  return new Date(y, m-1, dd).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+}
+function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
+function round5(n){ return Math.max(10, Math.round(n/5)*5); }
+
+function exState(id){
+  if(!S.exState[id]) S.exState[id] = {load: EX[id].start, streak:0, fails:0};
+  return S.exState[id];
+}
+function cardioState(id){
+  if(!S.cardioState[id]) S.cardioState[id] = {level: CARDIO[id].start};
+  return S.cardioState[id];
+}
+
+let saveT = null;
+function persist(){
+  clearTimeout(saveT);
+  saveT = setTimeout(()=>Store.save(S), 250);
+}
+
+/* =========================================================
+   PROGRESSION ENGINE — three independent tracks
+   ========================================================= */
+function evaluate(session){
+  const changes = [];
+
+  session.entries.forEach(en => {
+    if(en.kind === 'ex'){
+      const d = EX[en.exId], st = exState(en.exId);
+      const sets = en.sets.filter(s => s.reps > 0);
+      if(!sets.length) return;
+
+      const painHit = d.calf && sets.some(s => s.pain);
+      if(painHit){
+        st.streak = 0;
+        changes.push({t:'hold', txt:`${d.name} held at ${st.load} lb — you flagged pain.`});
+        return;
+      }
+      const rpes = sets.map(s => s.rpe).filter(Boolean);
+      const avgRpe = rpes.length ? rpes.reduce((a,b)=>a+b,0)/rpes.length : 0;
+      const allTop = sets.length >= d.sets && sets.every(s => s.reps >= d.hi);
+      const anyLow = sets.some(s => s.reps < d.lo);
+
+      if(allTop && (!avgRpe || avgRpe <= 8)){
+        st.fails = 0;
+        if(d.bw || d.hold){
+          changes.push({t:'up', txt:`${d.name} — target moves to ${d.hi + (d.hold?10:2)}${d.hold?'s':' reps'}.`});
+          d.lo = d.hi; d.hi = d.hi + (d.hold?10:2);
+        } else {
+          st.load = st.load + d.inc;
+          changes.push({t:'up', txt:`${d.name} → ${st.load} lb next time.`});
+        }
+      } else if(anyLow){
+        st.fails++;
+        if(st.fails >= 2 && !d.bw && !d.hold){
+          st.load = round5(st.load * 0.9);
+          st.fails = 0;
+          changes.push({t:'down', txt:`${d.name} backed off to ${st.load} lb after two short sessions.`});
+        }
+      }
+    }
+
+    if(en.kind === 'calf'){
+      const stage = CALF_STAGES[S.calf.stage];
+      const sets = en.sets.filter(s => s.reps > 0);
+      if(!sets.length) return;
+      const pain = sets.some(s => s.pain);
+      if(pain){
+        S.calf.streak = 0;
+        S.calf.lastPain = session.date;
+        changes.push({t:'hold', txt:`Calf progression paused. You flagged pain, so the stage stays put.`});
+        return;
+      }
+      const clean = sets.length >= stage.sets && sets.every(s => s.reps >= stage.reps);
+      if(clean){
+        S.calf.streak++;
+        if(S.calf.streak >= 2 && S.calf.stage < CALF_STAGES.length - 1){
+          S.calf.stage++; S.calf.streak = 0;
+          changes.push({t:'up', txt:`Calf moves up: ${CALF_STAGES[S.calf.stage].name}.`});
+        } else if(S.calf.streak < 2){
+          changes.push({t:'ok', txt:`Clean calf session. One more like it and the stage advances.`});
+        }
+      } else {
+        S.calf.streak = 0;
+      }
+    }
+
+    if(en.kind === 'cardio'){
+      const c = CARDIO[en.cardioId];
+      if(c.fixed) return;
+      const st = cardioState(en.cardioId);
+      const done = en.sets[0];
+      if(done && done.completed && (!done.rpe || done.rpe <= 8) && st.level < c.cap){
+        st.level = Math.min(c.cap, st.level + c.inc);
+        changes.push({t:'up', txt:`${c.name} → ${st.level}${c.unit ? ' ' + c.unit : ''}.`});
+      }
+    }
+  });
+
+  return changes;
+}
+
+/* =========================================================
+   RENDER — TODAY
+   ========================================================= */
+const el = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function testDue(){
+  const last = S.tests.length ? S.tests[S.tests.length-1].date : S.started;
+  return daysBetween(last, today()) >= 21;
+}
+
+function renderToday(){
+  const v = el('v-today');
+  const day = DAYS[S.live ? S.live.dayId : S.nextDay];
+  let h = '';
+
+  h += `<div class="h">Day ${day.id+1} — ${day.title}</div>`;
+  h += `<div class="sub">${S.sessions.length} sessions logged${S.calf.lastPain ? ' · calf pain last flagged ' + fmtDate(S.calf.lastPain) : ''}</div>`;
+
+  if(testDue()){
+    h += `<div class="notice"><b>Heel raise test is due.</b> Do a max set of single-leg raises on each side before you train, and record both numbers under Progress.</div>`;
+  }
+  if(S.calf.lastPain && daysBetween(S.calf.lastPain, today()) <= 14){
+    h += `<div class="notice hot">Calf progression is on hold until you log two clean sessions with no pain flag. If it keeps flaring, that's a conversation for your surgeon rather than something to push through.</div>`;
+  }
+
+  if(!S.live){
+    h += `<div class="sec"><h2>What's queued</h2>`;
+    day.items.forEach(it => h += rowHTML(it, false));
+    h += `</div>`;
+    h += `<div class="btnrow">
+            <button class="btn" onclick="startSession()">Start session</button>
+            <button class="btn ghost slim" onclick="skipDay()">Different day</button>
+          </div>`;
+  } else {
+    const doneIdx = new Set(S.live.entries.map(e => e.idx));
+    h += `<div class="sec"><h2>In progress</h2>`;
+    day.items.forEach((it,i) => h += rowHTML(it, doneIdx.has(i), i));
+    h += `</div>`;
+
+    if(S.live.openIdx !== null && S.live.openIdx !== undefined){
+      h += logPanel(day.items[S.live.openIdx], S.live.openIdx);
+    }
+    h += `<div class="btnrow">
+            <button class="btn" onclick="finishSession()">Finish and update targets</button>
+            <button class="btn ghost slim" onclick="cancelSession()">Discard</button>
+          </div>`;
+  }
+
+  if(S.live && S.live.lastSetAt){
+    h += `<div class="timer" id="tmr"><span>Rest since last set</span><b id="tmrv">0:00</b></div>`;
+  }
+  v.innerHTML = h;
+  tickTimer();
+}
+
+function itemMeta(it){
+  if(it.calf){
+    const st = CALF_STAGES[S.calf.stage];
+    return {name:`Calf protocol — ${st.name}`, rx:`${st.sets} × ${st.reps}`, detail:st.detail, track:'t-left'};
+  }
+  if(it.cardio){
+    const c = CARDIO[it.cardio], cs = c.fixed ? null : cardioState(it.cardio);
+    return {name:c.name, rx: c.fixed ? '10 min' : `${cs.level}${c.unit?' '+c.unit:''}`, detail:c.detail, track:'t-cardio'};
+  }
+  const d = EX[it.ex], st = exState(it.ex);
+  const load = d.bw ? 'body weight' : (d.hold ? '' : `${st.load} lb`);
+  const target = d.hold ? `${d.lo}–${d.hi}s` : `${d.lo}–${d.hi}`;
+  return {
+    name: d.name,
+    rx: `${d.sets} × ${target}${load ? ' · ' + load : ''}`,
+    detail: d.perSide ? 'Each side.' : '',
+    track: d.calf ? 't-left' : ''
+  };
+}
+
+function rowHTML(it, done, idx){
+  const m = itemMeta(it);
+  const click = (idx !== undefined && S.live) ? `onclick="openItem(${idx})"` : '';
+  return `<div class="row ${m.track} ${done?'done':''}" ${click} role="${click?'button':'group'}" ${click?'tabindex="0"':''}>
+    <div class="row-top"><span class="row-name">${esc(m.name)}</span><span class="row-rx">${esc(m.rx)}</span></div>
+    ${m.detail ? `<div class="row-detail">${esc(m.detail)}</div>` : ''}
+  </div>`;
+}
+
+/* ---------- set logging panel ---------- */
+function logPanel(it, idx){
+  const m = itemMeta(it);
+  const isCalf = !!it.calf || (it.ex && EX[it.ex].calf);
+  const isCardio = !!it.cardio;
+  const existing = S.live.entries.find(e => e.idx === idx);
+  const sets = existing ? existing.sets : [];
+
+  let h = `<div class="sec"><h2>Logging: ${esc(m.name)}</h2>`;
+  h += `<div class="note" style="margin-top:8px">${esc(m.detail || 'Target ' + m.rx)}</div>`;
+
+  if(sets.length){
+    h += `<table class="sets"><thead><tr>
+      <th>Set</th>${isCardio?'<th>Done</th>':'<th>Load</th><th>Reps</th>'}<th>RPE</th><th>Rest</th>${isCalf?'<th>Pain</th>':''}
+    </tr></thead><tbody>`;
+    sets.forEach((s,i)=>{
+      h += `<tr><td>${i+1}</td>`;
+      h += isCardio ? `<td>yes</td>` : `<td>${s.weight||'—'}</td><td>${s.reps}</td>`;
+      h += `<td>${s.rpe||'—'}</td><td>${s.rest?s.rest+'s':'—'}</td>`;
+      if(isCalf) h += `<td class="${s.pain?'flag':''}">${s.pain?'yes':'no'}</td>`;
+      h += `</tr>`;
+    });
+    h += `</tbody></table>`;
+  }
+
+  if(isCardio && !CARDIO[it.cardio].fixed){
+    h += `<div class="grid2" style="margin-top:12px">
+      <div class="f"><label>Level completed</label><input id="i-lvl" type="number" step="0.5" inputmode="decimal" value="${cardioState(it.cardio).level}"></div>
+      <div class="f"><label>Effort (RPE 1–10)</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
+    </div>
+    <div class="f" style="margin-top:9px"><label>Notes</label><input id="i-notes" placeholder="How it felt, anything off"></div>
+    <div class="btnrow"><button class="btn blue" onclick="saveCardio(${idx})">Log it</button>
+    <button class="btn ghost slim" onclick="closeItem()">Back</button></div>`;
+  } else if(isCardio){
+    h += `<div class="btnrow"><button class="btn blue" onclick="saveCardio(${idx})">Mark done</button>
+    <button class="btn ghost slim" onclick="closeItem()">Back</button></div>`;
+  } else {
+    const d = it.calf ? null : EX[it.ex];
+    const defW = d && !d.bw && !d.hold ? exState(it.ex).load : '';
+    const defR = it.calf ? CALF_STAGES[S.calf.stage].reps : (d.hold ? d.hi : d.hi);
+    h += `<div class="grid3" style="margin-top:12px">
+      <div class="f"><label>${d && d.hold ? 'Seconds' : 'Weight (lb)'}</label><input id="i-w" type="number" inputmode="decimal" value="${defW}" placeholder="${d&&d.bw?'—':''}"></div>
+      <div class="f"><label>${d && d.hold ? 'Hold (s)' : 'Reps'}</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
+      <div class="f"><label>RPE</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
+    </div>
+    <div class="grid2" style="margin-top:9px">
+      <div class="f"><label>Tempo</label><input id="i-tempo" placeholder="3-0-1"></div>
+      <div class="f"><label>Rest before (s)</label><input id="i-rest" type="number" inputmode="numeric" value="${restGuess()}"></div>
+    </div>
+    <div class="f" style="margin-top:9px"><label>Notes</label><input id="i-notes" placeholder="Optional"></div>`;
+    if(isCalf) h += `<label class="check"><input type="checkbox" id="i-pain"> Pain or sharp pulling in the Achilles</label>`;
+    h += `<div class="btnrow">
+      <button class="btn blue" onclick="saveSet(${idx})">Save set ${sets.length+1}</button>
+      <button class="btn ghost slim" onclick="closeItem()">Done here</button>
+    </div>`;
+  }
+  h += `</div>`;
+  return h;
+}
+
+function restGuess(){
+  if(!S.live || !S.live.lastSetAt) return '';
+  return Math.round((Date.now() - S.live.lastSetAt)/1000);
+}
+
+/* ---------- session actions ---------- */
+function startSession(){
+  S.live = {date: today(), dayId: S.nextDay, entries: [], openIdx: null, lastSetAt: null, startedAt: Date.now()};
+  persist(); renderToday();
+}
+function skipDay(){
+  S.nextDay = (S.nextDay + 1) % DAYS.length;
+  persist(); renderToday();
+}
+function cancelSession(){
+  if(!confirm('Discard this session? Nothing gets saved.')) return;
+  S.live = null; persist(); renderToday();
+}
+function openItem(i){ S.live.openIdx = i; persist(); renderToday(); window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'}); }
+function closeItem(){ S.live.openIdx = null; persist(); renderToday(); }
+
+function entryFor(idx){
+  const it = DAYS[S.live.dayId].items[idx];
+  let en = S.live.entries.find(e => e.idx === idx);
+  if(!en){
+    en = {idx, sets: [],
+      kind: it.calf ? 'calf' : (it.cardio ? 'cardio' : 'ex'),
+      exId: it.ex || null, cardioId: it.cardio || null};
+    S.live.entries.push(en);
+  }
+  return en;
+}
+
+function saveSet(idx){
+  const en = entryFor(idx);
+  const num = id => { const v = el(id) ? parseFloat(el(id).value) : NaN; return isNaN(v) ? 0 : v; };
+  const reps = num('i-r');
+  if(!reps){ alert('Reps are needed to log the set.'); return; }
+  en.sets.push({
+    weight: num('i-w'), reps,
+    rpe: num('i-rpe') || null,
+    tempo: el('i-tempo') ? el('i-tempo').value.trim() : '',
+    rest: num('i-rest') || null,
+    notes: el('i-notes') ? el('i-notes').value.trim() : '',
+    pain: el('i-pain') ? el('i-pain').checked : false
+  });
+  S.live.lastSetAt = Date.now();
+  persist(); renderToday();
+}
+
+function saveCardio(idx){
+  const en = entryFor(idx);
+  const lvl = el('i-lvl') ? parseFloat(el('i-lvl').value) : null;
+  const rpe = el('i-rpe') ? parseFloat(el('i-rpe').value) : null;
+  en.sets = [{completed:true, level:lvl, rpe: isNaN(rpe)?null:rpe, reps:0,
+    notes: el('i-notes') ? el('i-notes').value.trim() : ''}];
+  S.live.openIdx = null;
+  persist(); renderToday();
+}
+
+function finishSession(){
+  if(!S.live.entries.length){ alert('Log at least one set before finishing.'); return; }
+  const sess = {
+    date: S.live.date, dayId: S.live.dayId, entries: S.live.entries,
+    minutes: Math.round((Date.now() - S.live.startedAt)/60000),
+    volume: S.live.entries.reduce((t,en) =>
+      t + en.sets.reduce((x,s) => x + (s.weight||0)*(s.reps||0), 0), 0)
+  };
+  const changes = evaluate(sess);
+  S.sessions.push(sess);
+  S.nextDay = (S.live.dayId + 1) % DAYS.length;
+  S.live = null;
+  persist();
+
+  let h = `<div class="h">Session logged</div>
+    <div class="sub">${sess.minutes} minutes · ${Math.round(sess.volume).toLocaleString()} lb of total volume</div>`;
+  h += `<div class="sec"><h2>What changed for next time</h2>`;
+  if(!changes.length){
+    h += `<div class="notice">Targets stay where they are. Repeat the same numbers next time and push for the top of each rep range.</div>`;
+  } else {
+    changes.forEach(c => {
+      const cls = c.t === 'hold' ? 'hot' : (c.t === 'down' ? 'hot' : 'good');
+      h += `<div class="notice ${cls}">${esc(c.txt)}</div>`;
+    });
+  }
+  h += `<div class="btnrow"><button class="btn" onclick="renderToday()">Back to today</button></div></div>`;
+  el('v-today').innerHTML = h;
+  window.scrollTo({top:0});
+}
+
+/* ---------- rest timer ---------- */
+setInterval(tickTimer, 1000);
+function tickTimer(){
+  const t = el('tmrv');
+  if(!t || !S || !S.live || !S.live.lastSetAt) return;
+  const s = Math.floor((Date.now() - S.live.lastSetAt)/1000);
+  t.textContent = Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
+
+/* =========================================================
+   RENDER — BODY
+   ========================================================= */
+function renderBody(){
+  let h = `<div class="h">Body measurements</div>
+    <div class="sub">Tape at the same spot each time, first thing in the morning.</div>`;
+  h += `<div class="sec"><h2>New entry</h2><div class="grid2" style="margin-top:10px">`;
+  BODY_FIELDS.forEach(([k,l]) => {
+    h += `<div class="f"><label>${l}${k==='weight'?'':' (in)'}</label>
+      <input id="b-${k}" type="number" step="0.1" inputmode="decimal"></div>`;
+  });
+  h += `</div><div class="btnrow"><button class="btn" onclick="saveBody()">Save measurements</button></div></div>`;
+
+  h += `<div class="sec"><h2>History</h2>`;
+  if(!S.body.length){
+    h += `<div class="empty">No measurements yet. The left and right calf numbers are the ones worth being fussy about — they're how you'll know the gap is closing.</div>`;
+  } else {
+    [...S.body].reverse().forEach(b => {
+      const d = (b.calfL && b.calfR) ? (b.calfR - b.calfL).toFixed(1) : null;
+      h += `<div class="hist"><span>${b.weight?b.weight+' lb':'—'}${d!==null?` · calf gap ${d}"`:''}</span>
+        <span class="d">${fmtDate(b.date)}</span></div>`;
+    });
+  }
+  h += `</div>`;
+  el('v-body').innerHTML = h;
+}
+
+function saveBody(){
+  const rec = {date: today()};
+  let any = false;
+  BODY_FIELDS.forEach(([k]) => {
+    const v = parseFloat(el('b-'+k).value);
+    if(!isNaN(v)){ rec[k] = v; any = true; }
+  });
+  if(!any){ alert('Fill in at least one measurement.'); return; }
+  S.body.push(rec); persist(); renderBody(); renderProgress();
+}
+
+/* =========================================================
+   RENDER — PROGRESS
+   ========================================================= */
+function renderProgress(){
+  let h = `<div class="h">Progress</div><div class="sub">Two numbers matter most. Both compare your left side to your right.</div>`;
+
+  /* --- the differential gauge --- */
+  const lastB = [...S.body].reverse().find(b => b.calfL && b.calfR);
+  const lastT = S.tests.length ? S.tests[S.tests.length-1] : null;
+
+  h += `<div class="gauge"><h3>Calf circumference</h3>
+    <div class="cap">Same spot, widest point, relaxed.</div>`;
+  if(lastB){
+    const max = Math.max(lastB.calfL, lastB.calfR);
+    h += barHTML('Left', lastB.calfL, max, 'l', '"') + barHTML('Right', lastB.calfR, max, 'r', '"');
+    const gap = (lastB.calfR - lastB.calfL);
+    h += `<div class="delta"><span>Gap</span><b>${gap>0?'':'+'}${Math.abs(gap).toFixed(1)}" ${gap>0?'behind on the left':'even or ahead'}</b></div>`;
+  } else {
+    h += `<div class="empty">Add both calf measurements under Body to start this.</div>`;
+  }
+  h += `</div>`;
+
+  h += `<div class="gauge"><h3>Single-leg heel raise</h3>
+    <div class="cap">Max clean reps per side. Retest every 3 weeks.</div>`;
+  if(lastT){
+    const max = Math.max(lastT.heelL, lastT.heelR, 1);
+    h += barHTML('Left', lastT.heelL, max, 'l', '') + barHTML('Right', lastT.heelR, max, 'r', '');
+    const pct = lastT.heelR ? Math.round(lastT.heelL/lastT.heelR*100) : 0;
+    h += `<div class="delta"><span>Left as a share of right</span><b>${pct}%</b></div>`;
+  } else {
+    h += `<div class="empty">No test recorded yet.</div>`;
+  }
+  h += `<div class="grid3" style="margin-top:14px">
+      <div class="f"><label>Left reps</label><input id="t-l" type="number" inputmode="numeric"></div>
+      <div class="f"><label>Right reps</label><input id="t-r" type="number" inputmode="numeric"></div>
+      <div class="f"><label>&nbsp;</label><button class="btn slim" style="width:100%" onclick="saveTest()">Record</button></div>
+    </div></div>`;
+
+  /* --- calf stage --- */
+  h += `<div class="sec"><h2>Calf protocol</h2>`;
+  CALF_STAGES.forEach((st,i) => {
+    const state = i < S.calf.stage ? 'cleared' : (i === S.calf.stage ? 'current' : 'ahead');
+    h += `<div class="row ${i===S.calf.stage?'t-left':''} ${state==='cleared'?'done':''}">
+      <div class="row-top"><span class="row-name">${esc(st.name)}</span>
+      <span class="row-rx">${state === 'current' ? `${S.calf.streak}/2 clean` : state}</span></div>
+      <div class="row-detail">${esc(st.detail)}</div></div>`;
+  });
+  h += `</div>`;
+
+  /* --- body weight chart --- */
+  const w = S.body.filter(b => b.weight);
+  if(w.length > 1){
+    h += `<div class="chart"><h3>Body weight</h3>${lineSVG(w.map(b=>b.weight))}</div>`;
+  }
+
+  /* --- volume chart --- */
+  if(S.sessions.length > 1){
+    h += `<div class="chart"><h3>Volume per session (lb)</h3>${barSVG(S.sessions.slice(-12).map(s=>s.volume))}</div>`;
+  }
+
+  /* --- lift loads --- */
+  h += `<div class="sec"><h2>Current working loads</h2>`;
+  const ids = Object.keys(S.exState);
+  if(!ids.length) h += `<div class="empty">Nothing logged yet. Loads appear here once you finish your first session.</div>`;
+  ids.forEach(id => {
+    if(!EX[id] || EX[id].bw || EX[id].hold) return;
+    h += `<div class="hist"><span>${esc(EX[id].name)}</span><span class="d">${S.exState[id].load} lb</span></div>`;
+  });
+  Object.keys(S.cardioState).forEach(id => {
+    h += `<div class="hist"><span>${esc(CARDIO[id].name)}</span><span class="d">${S.cardioState[id].level} ${CARDIO[id].unit}</span></div>`;
+  });
+  h += `</div>`;
+
+  el('v-progress').innerHTML = h;
+}
+
+function barHTML(side, val, max, cls, unit){
+  const pct = max ? Math.max(4, val/max*100) : 4;
+  return `<div class="bar"><span class="side">${side}</span>
+    <div class="track"><div class="fill ${cls}" style="width:${pct}%"></div></div>
+    <span class="val">${val}${unit}</span></div>`;
+}
+
+function saveTest(){
+  const l = parseInt(el('t-l').value), r = parseInt(el('t-r').value);
+  if(isNaN(l) || isNaN(r)){ alert('Both sides are needed — the comparison is the point.'); return; }
+  S.tests.push({date: today(), heelL:l, heelR:r});
+  persist(); renderProgress(); renderToday();
+}
+
+function lineSVG(vals){
+  const W=300,H=90,p=6;
+  const min=Math.min(...vals), max=Math.max(...vals), rng=(max-min)||1;
+  const pts = vals.map((v,i)=>{
+    const x = p + i*(W-2*p)/Math.max(1,vals.length-1);
+    const y = H-p - ((v-min)/rng)*(H-2*p);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:90px">
+    <polyline points="${pts}" fill="none" stroke="#1F5673" stroke-width="2" stroke-linejoin="round"/>
+  </svg>
+  <div class="note" style="margin-top:6px">${min} to ${max} lb over ${vals.length} entries</div>`;
+}
+
+function barSVG(vals){
+  const W=300,H=90,n=vals.length,max=Math.max(...vals)||1;
+  const bw=(W/n)*0.68, gap=(W/n)*0.32;
+  let r='';
+  vals.forEach((v,i)=>{
+    const h=Math.max(2,(v/max)*(H-8));
+    r+=`<rect x="${(i*(bw+gap)).toFixed(1)}" y="${(H-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="#1E2427" opacity="0.75"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:90px">${r}</svg>
+  <div class="note" style="margin-top:6px">Peak ${Math.round(max).toLocaleString()} lb</div>`;
+}
+
+/* =========================================================
+   RENDER — PROGRAM
+   ========================================================= */
+function renderProgram(){
+  let h = `<div class="h">The program</div>
+    <div class="sub">Five days, under an hour each. Dumbbells, adjustable bench, treadmill, Max Trainer.</div>`;
+
+  DAYS.forEach(d => {
+    h += `<div class="sec"><h2>Day ${d.id+1} — ${d.title}</h2>`;
+    d.items.forEach(it => h += rowHTML(it, false));
+    h += `</div>`;
+  });
+
+  h += `<div class="sec"><h2>How progression works</h2>
+    <div class="note" style="margin-top:8px">
+      <p><b>Lifts.</b> Hit the top of the rep range on every set at RPE 8 or lower and the load goes up 5 lb. Fall below the bottom of the range twice and it drops 10%.</p>
+      <p style="margin-top:8px"><b>Calf.</b> Progresses by stage, not by weight, and only after two consecutive clean sessions. Any pain flag resets the count and holds the stage.</p>
+      <p style="margin-top:8px"><b>Cardio.</b> Max Trainer adds an interval, treadmill adds half a percent of incline. Speed stays put — impact is the thing to keep low.</p>
+    </div></div>`;
+
+  h += `<div class="sec"><h2>Your data</h2>
+    <div class="note" style="margin-top:8px">Everything lives on this device only. Nothing is uploaded anywhere.</div>
+    <div class="btnrow">
+      <button class="btn ghost slim" onclick="exportData()">Export backup</button>
+      <button class="btn ghost slim" onclick="resetData()">Erase everything</button>
+    </div></div>`;
+
+  el('v-program').innerHTML = h;
+}
+
+function exportData(){
+  const blob = new Blob([JSON.stringify(S,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `rebuild-backup-${today()}.json`;
+  a.click();
+}
+function resetData(){
+  if(!confirm('Erase every session, measurement and test? This cannot be undone.')) return;
+  S = blank(); persist(); renderAll();
+}
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+function renderAll(){
+  el('stamp').textContent = new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+  renderToday(); renderBody(); renderProgress(); renderProgram();
+}
+
+document.querySelectorAll('nav button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('nav button').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.view').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    el('v-' + b.dataset.v).classList.add('on');
+    window.scrollTo({top:0});
+  };
+});
+
+/* inline PWA manifest so this stays a single file */
+(function(){
+  const icon = 'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" fill="#1E2427"/><rect x="34" y="52" width="124" height="18" rx="3" fill="#1F5673"/><rect x="34" y="87" width="86" height="18" rx="3" fill="#9A6B2F"/><rect x="34" y="122" width="124" height="18" rx="3" fill="#E4E5E0"/></svg>`);
+  const m = {name:'Rebuild — training log', short_name:'Rebuild', start_url:'.', display:'standalone',
+    background_color:'#E4E5E0', theme_color:'#E4E5E0',
+    icons:[{src:icon, sizes:'192x192', type:'image/svg+xml', purpose:'any'}]};
+  document.getElementById('mf').href = URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/json'}));
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+})();
+
+(async function(){
+  S = await Store.load() || blank();
+  if(!S.calf) S.calf = {stage:0, streak:0, lastPain:null};
+  renderAll();
+})();
+</script>
+</body>
+</html>
