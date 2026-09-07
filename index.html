@@ -85,6 +85,12 @@ main{padding:var(--pad) var(--pad) 8px;max-width:640px;margin:0 auto}
   text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;
 }
 .demo:hover{color:var(--ink)}
+.voice{
+  margin-top:9px;padding:10px 12px;background:var(--paper);
+  border:1px dashed var(--rule);border-radius:4px;
+  font-size:14.5px;line-height:1.4;cursor:pointer;
+}
+.voice:active{background:var(--sink)}
 
 /* ---------- buttons ---------- */
 button{border:0;background:none;cursor:pointer;border-radius:4px}
@@ -163,10 +169,10 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 nav{
   position:fixed;left:0;right:0;bottom:0;z-index:30;
   background:var(--paper);border-top:1px solid var(--rule);
-  display:grid;grid-template-columns:repeat(4,1fr);
+  display:grid;grid-template-columns:repeat(5,1fr);
   padding-bottom:env(safe-area-inset-bottom);
 }
-nav button{padding:14px 4px 15px;font-size:13.5px;color:var(--muted);border-radius:0;border-top:2px solid transparent;margin-top:-1px}
+nav button{padding:14px 2px 15px;font-size:12.5px;color:var(--muted);border-radius:0;border-top:2px solid transparent;margin-top:-1px}
 nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 
 .empty{color:var(--muted);font-size:14px;padding:18px 0;line-height:1.5}
@@ -185,6 +191,7 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 
 <main>
   <section class="view on" id="v-today"></section>
+  <section class="view" id="v-food"></section>
   <section class="view" id="v-body"></section>
   <section class="view" id="v-progress"></section>
   <section class="view" id="v-program"></section>
@@ -192,6 +199,7 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 
 <nav>
   <button data-v="today" class="on">Today</button>
+  <button data-v="food">Food</button>
   <button data-v="body">Body</button>
   <button data-v="progress">Progress</button>
   <button data-v="program">Program</button>
@@ -334,8 +342,42 @@ const CARDIO = {
               detail:'10 minutes flat, conversational pace.'}
 };
 
-const BODY_FIELDS = [
-  ['weight','Body weight (lb)'],['chest','Chest'],['waist','Waist'],['hips','Hips'],
+/* ---- nutrition: five fixed slots, no free-text logging ---- */
+const P_TARGET = 205, KCAL_TARGET = 2450;
+const SLOTS = [
+  {id:'m1', name:'Morning', p:44, kcal:485, items:[
+    '1 cup low-fat cottage cheese','3 eggs, hard boiled','1 cup berries']},
+  {id:'m2', name:'Midday', p:51, kcal:535, items:[
+    '6 oz sliced deli turkey or ham','2 slices whole-grain bread','1 slice cheese','Baby carrots or cherry tomatoes']},
+  {id:'m3', name:'Around training', p:26, kcal:225, items:[
+    '1 scoop whey in water','1 banana']},
+  {id:'m4', name:'Evening', p:76, kcal:840, items:[
+    '8 oz rotisserie chicken breast','1 pouch microwave rice','1 bag frozen vegetables','1 tbsp olive oil over the vegetables']},
+  {id:'m5', name:'Late', p:30, kcal:390, items:[
+    '1 cup Greek yogurt 0%, or a 4 oz tuna pouch','1 oz almonds','1 apple']}
+];
+/* the dial, in the order units come off and go back on */
+const CUTS = [
+  {label:'the olive oil at dinner', kcal:120},
+  {label:'the almonds in the late slot', kcal:165},
+  {label:'the apple in the late slot', kcal:95}
+];
+const ADDS = [
+  {label:'a second rice pouch at dinner', kcal:300},
+  {label:'a third slice of bread at midday', kcal:100},
+  {label:'an extra scoop of whey', kcal:120}
+];
+
+/* ---- music: one playlist per training day ---- */
+const MUSIC_GUIDE = {
+  0:{suggest:'Upper Push', vibe:'Driving mid-tempo, roughly 120–140 BPM. Pressing days want momentum.'},
+  1:{suggest:'Lower Heavy', vibe:'Slower and heavier, 90–120 BPM. The calf work needs attention rather than adrenaline.'},
+  3:{suggest:'Intervals', vibe:'Fast, 140–160 BPM. Let the tempo drag the intervals along.'},
+  4:{suggest:'Upper Pull', vibe:'Driving mid-tempo, roughly 120–140 BPM.'},
+  5:{suggest:'Lower Steady', vibe:'Steady 120–135 BPM — matched to walking cadence for the incline finish.'}
+};
+
+const BODY_FIELDS = [  ['weight','Body weight (lb)'],['chest','Chest'],['waist','Waist'],['hips','Hips'],
   ['armL','Left arm'],['armR','Right arm'],['thighL','Left thigh'],['thighR','Right thigh'],
   ['calfL','Left calf'],['calfR','Right calf']
 ];
@@ -352,6 +394,10 @@ const blank = () => ({
   sessions: [],
   body: [],
   tests: [],
+  food: {},
+  diet: {cuts:0, adds:0, lastChange:null},
+  music: {},
+  echo: 'Echo',
   live: null,
   nextDay: 0
 });
@@ -490,6 +536,32 @@ function lastCalfSession(){
   return null;
 }
 
+function musicBlock(dayId){
+  const m = S.music[dayId];
+  const g = MUSIC_GUIDE[dayId];
+  if(!m || !m.name){
+    if(!g) return '';
+    return `<div class="sec"><h2>Music</h2>
+      <div class="note" style="margin-top:8px">No playlist set for this day yet. Build one called “${esc(g.suggest)}” in Amazon Music, then add it under Program → Music.</div></div>`;
+  }
+  const line = `Alexa, play my ${m.name} playlist on ${S.echo || 'Echo'}`;
+  let h = `<div class="sec"><h2>Music</h2>
+    <div class="row t-cardio">
+      <div class="row-top"><span class="row-name">${esc(m.name)}</span></div>
+      <div class="row-detail">Say it out loud — the Echo is wired to the speaker, so this plays straight through it.</div>
+      <div class="voice" onclick="copyLine(this, ${JSON.stringify(line).replace(/"/g,'&quot;')})">“${esc(line)}”</div>`;
+  if(m.url) h += `<a class="demo" href="${esc(m.url)}" target="_blank" rel="noopener">Open in Amazon Music instead</a>`;
+  h += `</div></div>`;
+  return h;
+}
+
+function copyLine(node, text){
+  navigator.clipboard && navigator.clipboard.writeText(text);
+  const was = node.textContent;
+  node.textContent = 'Copied';
+  setTimeout(() => { node.textContent = was; }, 1200);
+}
+
 function renderToday(){
   const v = el('v-today');
   if(S.nextDay === null || S.nextDay === undefined) S.nextDay = mondayIndex();
@@ -527,6 +599,7 @@ function renderToday(){
     h += `<div class="sec"><h2>What's queued</h2>`;
     day.items.forEach(it => h += rowHTML(it, false));
     h += `</div>`;
+    h += musicBlock(day.id);
     h += dayPicker();
     h += `<div class="btnrow"><button class="btn" onclick="startSession()">Start session</button></div>`;
   } else {
@@ -793,6 +866,114 @@ function saveBody(){
 }
 
 /* =========================================================
+   RENDER — FOOD
+   ========================================================= */
+function calTarget(){
+  const cut = CUTS.slice(0, S.diet.cuts).reduce((t,c)=>t+c.kcal, 0);
+  const add = ADDS.slice(0, S.diet.adds).reduce((t,c)=>t+c.kcal, 0);
+  return KCAL_TARGET - cut + add;
+}
+
+/* compares the newest weigh-in against one roughly three weeks earlier */
+function weightTrend(){
+  const w = S.body.filter(b => b.weight).slice().sort((a,b) => a.date < b.date ? -1 : 1);
+  if(w.length < 2) return null;
+  const last = w[w.length-1];
+  let ref = null, best = Infinity;
+  w.slice(0,-1).forEach(b => {
+    const gap = daysBetween(b.date, last.date);
+    if(gap >= 18 && Math.abs(gap-21) < best){ best = Math.abs(gap-21); ref = b; }
+  });
+  if(!ref) return null;
+  const days = daysBetween(ref.date, last.date);
+  return {perWeek: (last.weight - ref.weight) / days * 7, days, from: ref.weight, to: last.weight};
+}
+
+function dialAdvice(){
+  const t = weightTrend();
+  if(!t) return {kind:'wait', txt:'Once you have weigh-ins spanning three weeks, this will tell you whether to change anything.'};
+  if(S.diet.lastChange && daysBetween(S.diet.lastChange, today()) < 14){
+    return {kind:'wait', txt:`You changed something ${daysBetween(S.diet.lastChange, today())} days ago. Give it two weeks before changing anything else.`};
+  }
+  const r = t.perWeek;
+  if(r > -0.25){
+    const next = CUTS[S.diet.cuts];
+    if(!next) return {kind:'stall', txt:`Weight has held flat for ${t.days} days and you've already taken out every unit on the dial. Worth a fresh look at portions rather than cutting further.`};
+    return {kind:'cut', txt:`Flat for ${t.days} days — ${t.from} to ${t.to} lb. Drop ${next.label} and hold everything else.`, next};
+  }
+  if(r < -1.5){
+    const next = ADDS[S.diet.adds];
+    if(!next) return {kind:'fast', txt:`Losing ${Math.abs(r).toFixed(1)} lb a week, which is faster than muscle likes. Add food beyond what's on the dial.`};
+    return {kind:'add', txt:`Losing ${Math.abs(r).toFixed(1)} lb a week — quick enough to cost you muscle. Add ${next.label}.`, next};
+  }
+  return {kind:'ok', txt:`Down ${Math.abs(r).toFixed(1)} lb a week over the last ${t.days} days. That's the rate you want. Change nothing.`};
+}
+
+function renderFood(){
+  const ticked = S.food[today()] || [];
+  const p = SLOTS.filter(s => ticked.includes(s.id)).reduce((t,s) => t + s.p, 0);
+  const k = SLOTS.filter(s => ticked.includes(s.id)).reduce((t,s) => t + s.kcal, 0);
+  const kt = calTarget();
+
+  let h = `<div class="h">Food</div>
+    <div class="sub">Five slots, same every day. Tick them as you eat.</div>`;
+
+  h += `<div class="gauge"><h3>Today</h3><div class="cap">Protein is the one to hit.</div>`;
+  h += barHTML('Protein', p, Math.max(P_TARGET, p), 'l', ` / ${P_TARGET}g`);
+  h += barHTML('Calories', k, Math.max(kt, k), 'r', ` / ${kt}`);
+  const short = P_TARGET - p;
+  h += `<div class="delta"><span>${short > 0 ? 'Protein still to go' : 'Protein target met'}</span>
+    <b>${short > 0 ? short + ' g' : 'done'}</b></div></div>`;
+
+  h += `<div class="sec"><h2>The slots</h2>`;
+  SLOTS.forEach(s => {
+    const on = ticked.includes(s.id);
+    h += `<div class="row ${on?'done':''}" onclick="toggleSlot('${s.id}')" role="button" tabindex="0">
+      <div class="row-top"><span class="row-name">${on?'✓ ':''}${esc(s.name)}</span>
+        <span class="row-rx">${s.p} g · ${s.kcal} cal</span></div>
+      <div class="row-detail">${s.items.map(esc).join(' · ')}</div></div>`;
+  });
+  h += `</div>`;
+
+  const a = dialAdvice();
+  h += `<div class="sec"><h2>The dial</h2>`;
+  const cls = a.kind === 'ok' ? 'good' : (a.kind === 'wait' ? '' : 'hot');
+  h += `<div class="notice ${cls}">${esc(a.txt)}</div>`;
+  if(a.next && a.kind === 'cut') h += `<div class="btnrow"><button class="btn slim" onclick="applyDial('cut')">I dropped it</button></div>`;
+  if(a.next && a.kind === 'add') h += `<div class="btnrow"><button class="btn slim" onclick="applyDial('add')">I added it</button></div>`;
+  if(S.diet.cuts || S.diet.adds){
+    h += `<div class="note" style="margin-top:12px">Currently running at ${kt} calories.`;
+    if(S.diet.cuts) h += ` Removed: ${CUTS.slice(0,S.diet.cuts).map(c=>c.label).join(', ')}.`;
+    if(S.diet.adds) h += ` Added: ${ADDS.slice(0,S.diet.adds).map(c=>c.label).join(', ')}.`;
+    h += `</div>`;
+  }
+  h += `</div>`;
+
+  h += `<div class="sec"><h2>Worth remembering</h2>
+    <div class="note" style="margin-top:8px">
+      <p>Weigh the protein, eyeball everything else. Vegetables don't need measuring.</p>
+      <p style="margin-top:8px">Never solve a stall by cutting protein — it's holding your muscle and feeding tendon repair at the same time.</p>
+      <p style="margin-top:8px">Recheck these targets around 220 lb. Maintenance falls as you do, so today's deficit becomes tomorrow's maintenance.</p>
+    </div></div>`;
+
+  el('v-food').innerHTML = h;
+}
+
+function toggleSlot(id){
+  const d = today();
+  const list = S.food[d] || [];
+  S.food[d] = list.includes(id) ? list.filter(x => x !== id) : list.concat(id);
+  persist(); renderFood();
+}
+
+function applyDial(kind){
+  if(kind === 'cut') S.diet.cuts++;
+  else S.diet.adds++;
+  S.diet.lastChange = today();
+  persist(); renderFood();
+}
+
+/* =========================================================
    RENDER — PROGRESS
    ========================================================= */
 function renderProgress(){
@@ -971,6 +1152,24 @@ function renderProgram(){
     h += `</div>`;
   });
 
+  h += `<div class="sec"><h2>Music</h2>
+    <div class="note" style="margin-top:8px">Name each playlist exactly as it's named in Amazon Music — the voice command reads that name back verbatim, so a mismatch is why Alexa says she can't find it.</div>
+    <div class="f" style="margin-top:12px"><label>What your Echo is called in the Alexa app</label>
+      <input id="mus-echo" value="${esc(S.echo || '')}" placeholder="Basement Echo"></div>`;
+  DAYS.filter(d => !d.rest).forEach(d => {
+    const m = S.music[d.id] || {};
+    const g = MUSIC_GUIDE[d.id] || {};
+    h += `<div style="margin-top:18px">
+      <div class="row-name">${d.day} — ${esc(d.title)}</div>
+      <div class="row-detail" style="margin-bottom:8px">${esc(g.vibe || '')}</div>
+      <div class="f"><label>Playlist name</label>
+        <input id="mus-n-${d.id}" value="${esc(m.name || '')}" placeholder="${esc(g.suggest || '')}"></div>
+      <div class="f" style="margin-top:8px"><label>Amazon Music link (optional)</label>
+        <input id="mus-u-${d.id}" value="${esc(m.url || '')}" placeholder="https://music.amazon.com/..."></div>
+    </div>`;
+  });
+  h += `<div class="btnrow"><button class="btn" onclick="saveMusic()">Save playlists</button></div></div>`;
+
   h += `<div class="sec"><h2>Working around a 7 ft ceiling</h2>
     <div class="note" style="margin-top:8px">Nothing in this program travels above chest height while you're standing. The shoulder press is done on a 75° bench rather than vertically, and triceps work is done lying down. If you ever swap something in, check the top of the movement before you load it.</div></div>`;
 
@@ -982,13 +1181,62 @@ function renderProgram(){
     </div></div>`;
 
   h += `<div class="sec"><h2>Your data</h2>
-    <div class="note" style="margin-top:8px">Everything lives on this device only. Nothing is uploaded anywhere.</div>
+    <div class="note" style="margin-top:8px">Everything lives on this device only — nothing is uploaded anywhere, and this phone and your desktop keep completely separate copies. To move data between them, export here and load the file on the other device.</div>
     <div class="btnrow">
       <button class="btn ghost slim" onclick="exportData()">Export backup</button>
+      <button class="btn ghost slim" onclick="importData()">Load backup</button>
+    </div>
+    <div class="btnrow">
       <button class="btn ghost slim" onclick="resetData()">Erase everything</button>
     </div></div>`;
 
   el('v-program').innerHTML = h;
+}
+
+function importData(){
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'application/json,.json';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    if(!f) return;
+    let d;
+    try{ d = JSON.parse(await f.text()); }
+    catch(e){ alert("That file couldn't be read. Pick the .json file the export button produced."); return; }
+
+    if(!d || typeof d !== 'object' || !Array.isArray(d.sessions) || !Array.isArray(d.body)){
+      alert("That doesn't look like a Rebuild backup."); return;
+    }
+    const msg = `This backup holds:\n\n`
+      + `  ${d.sessions.length} sessions\n`
+      + `  ${d.body.length} measurement entries\n`
+      + `  ${(d.tests||[]).length} heel raise tests\n\n`
+      + `Loading it replaces everything currently on this device. Continue?`;
+    if(!confirm(msg)) return;
+
+    S = Object.assign(blank(), d);
+    if(!S.calf) S.calf = {stage:0, streak:0, lastPain:null};
+    S.live = null;
+    S.nextDay = mondayIndex();
+    openSession = null;
+    seedStates();
+    const ok = await Store.save(S);
+    renderAll();
+    alert(ok ? 'Backup loaded.' : 'Loaded, but saving to this device failed. Check that storage is enabled for this site.');
+  };
+  inp.click();
+}
+
+function saveMusic(){
+  S.echo = el('mus-echo').value.trim() || 'Echo';
+  DAYS.filter(d => !d.rest).forEach(d => {
+    const n = el('mus-n-'+d.id).value.trim();
+    const u = el('mus-u-'+d.id).value.trim();
+    if(n || u) S.music[d.id] = {name:n, url:u};
+    else delete S.music[d.id];
+  });
+  persist(); renderProgram(); renderToday();
+  alert('Playlists saved.');
 }
 
 function exportData(){
@@ -1008,7 +1256,7 @@ function resetData(){
    ========================================================= */
 function renderAll(){
   el('stamp').textContent = new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
-  renderToday(); renderBody(); renderProgress(); renderProgram();
+  renderToday(); renderFood(); renderBody(); renderProgress(); renderProgram();
 }
 
 document.querySelectorAll('nav button').forEach(b => {
@@ -1037,6 +1285,10 @@ document.querySelectorAll('nav button').forEach(b => {
 (async function(){
   S = await Store.load() || blank();
   if(!S.calf) S.calf = {stage:0, streak:0, lastPain:null};
+  if(!S.food) S.food = {};
+  if(!S.diet) S.diet = {cuts:0, adds:0, lastChange:null};
+  if(!S.music) S.music = {};
+  if(!S.echo) S.echo = 'Echo';
   /* migrating from the old 5-day rotation: re-anchor to the calendar week */
   S.nextDay = mondayIndex();
   seedStates();
