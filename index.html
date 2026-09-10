@@ -453,8 +453,20 @@ function evaluate(session){
       }
       const rpes = sets.map(s => s.rpe).filter(Boolean);
       const avgRpe = rpes.length ? rpes.reduce((a,b)=>a+b,0)/rpes.length : 0;
-      const allTop = sets.length >= d.sets && sets.every(s => s.reps >= st.hi);
-      const anyLow = sets.some(s => s.reps < st.lo);
+
+      let allTop, anyLow;
+      const L = sets.filter(s => s.side === 'L'), R = sets.filter(s => s.side === 'R');
+      if(d.perSide && L.length && R.length){
+        /* both sides must earn it — the weaker leg gates the load,
+           so progression can't widen an asymmetry */
+        const clears = side => side.length >= d.sets && side.every(s => s.reps >= st.hi);
+        const short  = side => side.some(s => s.reps < st.lo);
+        allTop = clears(L) && clears(R);
+        anyLow = short(L) || short(R);
+      } else {
+        allTop = sets.length >= d.sets && sets.every(s => s.reps >= st.hi);
+        anyLow = sets.some(s => s.reps < st.lo);
+      }
 
       if(allTop && (!avgRpe || avgRpe <= 8)){
         st.fails = 0;
@@ -679,12 +691,20 @@ function logPanel(it, idx){
   if(m.q) h += `<a class="demo" href="${demoURL(m.q)}" target="_blank" rel="noopener">Watch a demo</a>`;
 
   if(sets.length){
+    const d = it.ex ? EX[it.ex] : null;
+    const isHold = d && d.hold, isBW = d && d.bw;
     h += `<table class="sets"><thead><tr>
-      <th>Set</th>${isCardio?'<th>Done</th>':'<th>Load</th><th>Reps</th>'}<th>RPE</th><th>Rest</th>${isCalf?'<th>Pain</th>':''}
+      <th>Set</th>${d && d.perSide ? '<th>Side</th>' : ''}${isCardio ? '<th>Done</th>'
+        : (isHold ? '<th>Hold</th>' : (isBW ? '<th>Reps</th>' : '<th>Load</th><th>Reps</th>'))}
+      <th>RPE</th><th>Rest</th>${isCalf?'<th>Pain</th>':''}
     </tr></thead><tbody>`;
     sets.forEach((s,i)=>{
       h += `<tr><td>${i+1}</td>`;
-      h += isCardio ? `<td>yes</td>` : `<td>${s.weight||'—'}</td><td>${s.reps}</td>`;
+      if(d && d.perSide) h += `<td>${s.side || '\u2014'}</td>`;
+      if(isCardio) h += `<td>yes</td>`;
+      else if(isHold) h += `<td>${s.reps}s</td>`;
+      else if(isBW) h += `<td>${s.reps}</td>`;
+      else h += `<td>${s.weight||'—'}</td><td>${s.reps}</td>`;
       h += `<td>${s.rpe||'—'}</td><td>${s.rest?s.rest+'s':'—'}</td>`;
       if(isCalf) h += `<td class="${s.pain?'flag':''}">${s.pain?'yes':'no'}</td>`;
       h += `</tr>`;
@@ -706,15 +726,38 @@ function logPanel(it, idx){
   } else {
     const d = it.calf ? null : EX[it.ex];
     const st = it.calf ? null : exState(it.ex);
-    const defW = d && !d.bw && !d.hold ? st.load : '';
+    const isHold = d && d.hold, isBW = d && d.bw;
+    const perSide = d && d.perSide;
     const defR = it.calf ? CALF_STAGES[S.calf.stage].reps : st.hi;
-    h += `<div class="grid3" style="margin-top:12px">
-      <div class="f"><label>${d && d.hold ? 'Seconds' : 'Weight (lb)'}</label><input id="i-w" type="number" inputmode="decimal" value="${defW}" placeholder="${d&&d.bw?'—':''}"></div>
-      <div class="f"><label>${d && d.hold ? 'Hold (s)' : 'Reps'}</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
-      <div class="f"><label>RPE</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
-    </div>
-    <div class="grid2" style="margin-top:9px">
-      <div class="f"><label>Tempo</label><input id="i-tempo" placeholder="3-0-1"></div>
+    const nextSide = sets.length ? (sets[sets.length-1].side === 'L' ? 'R' : 'L') : 'L';
+
+    if(perSide){
+      h += `<div class="f" style="margin-top:12px"><label>Side</label>
+        <select id="i-side">
+          <option value="L" ${nextSide==='L'?'selected':''}>Left</option>
+          <option value="R" ${nextSide==='R'?'selected':''}>Right</option>
+        </select></div>`;
+    }
+
+    if(isHold){
+      h += `<div class="grid2" style="margin-top:12px">
+        <div class="f"><label>Hold (seconds)</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
+        <div class="f"><label>RPE</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
+      </div>`;
+    } else if(isBW){
+      h += `<div class="grid2" style="margin-top:12px">
+        <div class="f"><label>Reps</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
+        <div class="f"><label>RPE</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
+      </div>`;
+    } else {
+      h += `<div class="grid3" style="margin-top:12px">
+        <div class="f"><label>Weight (lb)</label><input id="i-w" type="number" inputmode="decimal" value="${st ? st.load : ''}"></div>
+        <div class="f"><label>Reps</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
+        <div class="f"><label>RPE</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
+      </div>`;
+    }
+    h += `<div class="grid2" style="margin-top:9px">
+      <div class="f"><label>Tempo</label><input id="i-tempo" placeholder="${isHold ? 'n/a' : '3-0-1'}"></div>
       <div class="f"><label>Rest before (s)</label><input id="i-rest" type="number" inputmode="numeric" value="${restGuess()}"></div>
     </div>
     <div class="f" style="margin-top:9px"><label>Notes</label><input id="i-notes" placeholder="Optional"></div>`;
@@ -765,13 +808,14 @@ function saveSet(idx){
   const en = entryFor(idx);
   const num = id => { const v = el(id) ? parseFloat(el(id).value) : NaN; return isNaN(v) ? 0 : v; };
   const reps = num('i-r');
-  if(!reps){ alert('Reps are needed to log the set.'); return; }
+  if(!reps){ alert('Enter a number before saving the set.'); return; }
   en.sets.push({
-    weight: num('i-w'), reps,
+    weight: el('i-w') ? num('i-w') : 0, reps,
     rpe: num('i-rpe') || null,
     tempo: el('i-tempo') ? el('i-tempo').value.trim() : '',
     rest: num('i-rest') || null,
     notes: el('i-notes') ? el('i-notes').value.trim() : '',
+    side: el('i-side') ? el('i-side').value : null,
     pain: el('i-pain') ? el('i-pain').checked : false
   });
   S.live.lastSetAt = Date.now();
@@ -1089,7 +1133,7 @@ function renderProgress(){
           <span class="row-rx">${fmtDate(s.date)}</span>
         </div>
         <div class="row-detail">${s.minutes} min · ${Math.round(s.volume).toLocaleString()} lb volume · tap for sets</div>`;
-      if(openSession === idx) h += sessionDetail(s);
+      if(openSession === idx) h += sessionDetail(s, idx);
       h += `</div>`;
     });
   }
@@ -1099,29 +1143,126 @@ function renderProgress(){
 }
 
 let openSession = null;
+let editing = null;   /* {s: session index, e: entry index, k: set index} */
+
 function toggleSession(i){
   openSession = (openSession === i) ? null : i;
+  editing = null;
   renderProgress();
 }
-function sessionDetail(s){
+function editSet(s,e,k){ editing = {s,e,k}; renderProgress(); }
+function cancelEdit(){ editing = null; renderProgress(); }
+
+function recalcVolume(sess){
+  sess.volume = sess.entries.reduce((t,en) =>
+    t + en.sets.reduce((x,st) => x + (st.weight||0)*(st.reps||0), 0), 0);
+}
+
+function saveEdit(){
+  const {s,e,k} = editing;
+  const set = S.sessions[s].entries[e].sets[k];
+  const num = id => { const v = el(id) ? parseFloat(el(id).value) : NaN; return isNaN(v) ? 0 : v; };
+  if(el('e-w')) set.weight = num('e-w');
+  if(el('e-r')) set.reps = num('e-r');
+  set.rpe  = num('e-rpe') || null;
+  set.rest = num('e-rest') || null;
+  if(el('e-tempo')) set.tempo = el('e-tempo').value.trim();
+  if(el('e-notes')) set.notes = el('e-notes').value.trim();
+  if(el('e-pain'))  set.pain  = el('e-pain').checked;
+  if(el('e-side'))  set.side  = el('e-side').value;
+  recalcVolume(S.sessions[s]);
+  editing = null; persist(); renderProgress();
+}
+
+function deleteSet(s,e,k){
+  if(!confirm('Delete this set?')) return;
+  const sess = S.sessions[s];
+  sess.entries[e].sets.splice(k,1);
+  if(!sess.entries[e].sets.length) sess.entries.splice(e,1);
+  if(!sess.entries.length){ S.sessions.splice(s,1); openSession = null; }
+  else recalcVolume(sess);
+  editing = null; persist(); renderProgress();
+}
+
+function deleteSession(s){
+  if(!confirm('Delete this whole session? Everything logged in it goes with it.')) return;
+  S.sessions.splice(s,1);
+  openSession = null; editing = null;
+  persist(); renderProgress();
+}
+
+function editForm(en, set){
+  const d = en.exId ? EX[en.exId] : null;
+  const isHold = d && d.hold, isBW = d && d.bw, isCardio = en.kind === 'cardio';
+  const isCalf = en.kind === 'calf' || (d && d.calf);
+  let h = `<div style="margin-top:10px;padding:12px;background:var(--paper);border:1px solid var(--rule);border-radius:4px">`;
+  if(d && d.perSide){
+    h += `<div class="f" style="margin-bottom:9px"><label>Side</label><select id="e-side">
+      <option value="L" ${set.side==='L'?'selected':''}>Left</option>
+      <option value="R" ${set.side==='R'?'selected':''}>Right</option></select></div>`;
+  }
+  if(!isCardio){
+    if(isHold){
+      h += `<div class="grid2"><div class="f"><label>Hold (seconds)</label>
+        <input id="e-r" type="number" inputmode="numeric" value="${set.reps||''}"></div>
+        <div class="f"><label>RPE</label><input id="e-rpe" type="number" inputmode="numeric" value="${set.rpe||''}"></div></div>`;
+    } else if(isBW){
+      h += `<div class="grid2"><div class="f"><label>Reps</label>
+        <input id="e-r" type="number" inputmode="numeric" value="${set.reps||''}"></div>
+        <div class="f"><label>RPE</label><input id="e-rpe" type="number" inputmode="numeric" value="${set.rpe||''}"></div></div>`;
+    } else {
+      h += `<div class="grid3"><div class="f"><label>Weight (lb)</label>
+        <input id="e-w" type="number" inputmode="decimal" value="${set.weight||''}"></div>
+        <div class="f"><label>Reps</label><input id="e-r" type="number" inputmode="numeric" value="${set.reps||''}"></div>
+        <div class="f"><label>RPE</label><input id="e-rpe" type="number" inputmode="numeric" value="${set.rpe||''}"></div></div>`;
+    }
+    h += `<div class="grid2" style="margin-top:9px">
+      <div class="f"><label>Tempo</label><input id="e-tempo" value="${esc(set.tempo||'')}"></div>
+      <div class="f"><label>Rest (s)</label><input id="e-rest" type="number" inputmode="numeric" value="${set.rest||''}"></div></div>`;
+  } else {
+    h += `<div class="f"><label>RPE</label><input id="e-rpe" type="number" inputmode="numeric" value="${set.rpe||''}"></div>`;
+  }
+  h += `<div class="f" style="margin-top:9px"><label>Notes</label><input id="e-notes" value="${esc(set.notes||'')}"></div>`;
+  if(isCalf) h += `<label class="check"><input type="checkbox" id="e-pain" ${set.pain?'checked':''}> Pain flagged</label>`;
+  h += `<div class="btnrow">
+      <button class="btn blue slim" onclick="event.stopPropagation();saveEdit()">Save</button>
+      <button class="btn ghost slim" onclick="event.stopPropagation();cancelEdit()">Cancel</button>
+      <button class="btn ghost slim" onclick="event.stopPropagation();deleteSet(${editing.s},${editing.e},${editing.k})">Delete</button>
+    </div></div>`;
+  return h;
+}
+
+function sessionDetail(s, sIdx){
   let h = '<div style="margin-top:10px">';
-  s.entries.forEach(en => {
+  s.entries.forEach((en, ei) => {
+    const d = en.exId ? EX[en.exId] : null;
+    const isHold = d && d.hold, isBW = d && d.bw;
     const name = en.kind === 'calf' ? 'Calf protocol'
-      : (en.kind === 'cardio' ? CARDIO[en.cardioId].name : EX[en.exId].name);
+      : (en.kind === 'cardio' ? CARDIO[en.cardioId].name : d.name);
     h += `<div style="margin-top:10px"><div class="row-name" style="font-size:14px">${esc(name)}</div>`;
     h += `<table class="sets"><tbody>`;
-    en.sets.forEach((st, i) => {
+    en.sets.forEach((st, si) => {
+      const open = editing && editing.s === sIdx && editing.e === ei && editing.k === si;
+      h += `<tr onclick="event.stopPropagation();editSet(${sIdx},${ei},${si})" style="cursor:pointer">`;
       if(en.kind === 'cardio'){
-        h += `<tr><td>Completed${st.level!=null?' at '+st.level:''}</td><td>${st.rpe?'RPE '+st.rpe:''}</td></tr>`;
+        h += `<td>Completed${st.level!=null?' at '+st.level:''}</td><td>${st.rpe?'RPE '+st.rpe:''}</td><td></td><td></td>`;
+      } else if(isHold){
+        h += `<td>${si+1}</td>${d.perSide?`<td>${st.side||''}</td>`:''}<td>${st.reps}s hold</td><td>${st.rpe?'RPE '+st.rpe:'\u2014'}</td><td>${st.rest?st.rest+'s':'\u2014'}</td>`;
+      } else if(isBW){
+        h += `<td>${si+1}</td>${d.perSide?`<td>${st.side||''}</td>`:''}<td>${st.reps} reps</td><td>${st.rpe?'RPE '+st.rpe:'\u2014'}</td><td>${st.rest?st.rest+'s':'\u2014'}</td>`;
       } else {
-        h += `<tr><td>${i+1}</td><td>${st.weight||'—'} lb</td><td>${st.reps} reps</td>
-          <td>${st.rpe?'RPE '+st.rpe:'—'}</td><td>${st.tempo||'—'}</td><td>${st.rest?st.rest+'s':'—'}</td>
-          ${st.pain?'<td class="flag">pain</td>':'<td></td>'}</tr>`;
+        h += `<td>${si+1}</td>${d&&d.perSide?`<td>${st.side||''}</td>`:''}<td>${st.weight||'\u2014'} lb</td><td>${st.reps} reps</td>
+              <td>${st.rpe?'RPE '+st.rpe:'\u2014'}</td><td>${st.tempo||'\u2014'}</td><td>${st.rest?st.rest+'s':'\u2014'}</td>`;
       }
+      h += st.pain ? '<td class="flag">pain</td>' : '<td></td>';
+      h += `</tr>`;
       if(st.notes) h += `<tr><td colspan="7" class="row-detail">${esc(st.notes)}</td></tr>`;
+      if(open) h += `<tr><td colspan="7">${editForm(en, st)}</td></tr>`;
     });
     h += `</tbody></table></div>`;
   });
+  h += `<div class="note" style="margin-top:14px">Tap any set to correct or delete it.</div>`;
+  h += `<div class="btnrow"><button class="btn ghost slim" onclick="event.stopPropagation();deleteSession(${sIdx})">Delete this session</button></div>`;
   return h + '</div>';
 }
 
