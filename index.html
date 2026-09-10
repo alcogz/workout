@@ -206,6 +206,9 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 </nav>
 
 <script>
+const BUILD = 'v9';
+const BUILT = '10 Sep 2026';
+
 /* =========================================================
    STORAGE ADAPTER
    Uses window.storage when present (Claude artifact sandbox),
@@ -1406,6 +1409,10 @@ function renderProgram(){
       <button class="btn ghost slim" onclick="resetData()">Erase everything</button>
     </div></div>`;
 
+  h += `<div class="sec"><h2>Build</h2>
+    <div class="note" style="margin-top:8px">Running <b style="color:var(--left)">${BUILD}</b>, built ${BUILT}. This also shows in the header on every screen \u2014 if it doesn't match the newest build, you're looking at a cached copy.</div>
+    <div class="btnrow"><button class="btn ghost slim" onclick="forceFresh()">Force a fresh copy</button></div></div>`;
+
   el('v-program').innerHTML = h;
 }
 
@@ -1455,6 +1462,21 @@ function saveMusic(){
   alert('Playlists saved.');
 }
 
+async function forceFresh(){
+  try{
+    if('serviceWorker' in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for(const r of regs) await r.unregister();
+    }
+    if(window.caches){
+      const keys = await caches.keys();
+      for(const k of keys) await caches.delete(k);
+    }
+  }catch(e){}
+  /* cache-busting query, then strip it back off on the reload */
+  location.replace(location.pathname + '?fresh=' + Date.now());
+}
+
 function exportData(){
   const blob = new Blob([JSON.stringify(S,null,2)], {type:'application/json'});
   const a = document.createElement('a');
@@ -1471,7 +1493,8 @@ function resetData(){
    BOOT
    ========================================================= */
 function renderAll(){
-  el('stamp').textContent = new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+  el('stamp').innerHTML = `<b style="color:var(--left)">${BUILD}</b> \u00b7 ` +
+    new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
   renderToday(); renderFood(); renderBody(); renderProgress(); renderProgram();
 }
 
