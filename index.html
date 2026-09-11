@@ -206,7 +206,7 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 </nav>
 
 <script>
-const BUILD = 'v13';
+const BUILD = 'v14';
 const BUILT = '10 Sep 2026';
 
 /* =========================================================
@@ -390,6 +390,31 @@ const MUSIC_GUIDE = {
   5:{suggest:'Lower Steady', vibe:'Steady 120–135 BPM — matched to walking cadence for the incline finish.'}
 };
 
+/* ---- weekly shop: quantities derived from the five slots ---- */
+const SHOP = [
+  {group:'Protein', items:[
+    {id:'s1',  t:'Cottage cheese, low-fat', q:'two 32 oz tubs'},
+    {id:'s2',  t:'Eggs', q:'2 dozen'},
+    {id:'s3',  t:'Deli turkey or ham, low sodium', q:'3 lb'},
+    {id:'s4',  t:'Sliced cheese', q:'1 pack'},
+    {id:'s5',  t:'Rotisserie chicken', q:'3 birds'},
+    {id:'s6',  t:'Greek yogurt, 0%', q:'two 32 oz tubs'},
+    {id:'s7',  t:'Whey protein', q:'1 tub (lasts a month)'},
+    {id:'s8',  t:'Tuna pouches, 4 oz', q:'4'}]},
+  {group:'Carbs', items:[
+    {id:'s9',  t:'Whole-grain bread', q:'1 loaf'},
+    {id:'s10', t:'Microwave rice pouches', q:'7'},
+    {id:'s11', t:'Bananas', q:'7'},
+    {id:'s12', t:'Frozen berries', q:'three 12 oz bags'}]},
+  {group:'Vegetables', items:[
+    {id:'s13', t:'Frozen vegetable steam bags', q:'7'},
+    {id:'s14', t:'Baby carrots', q:'2 lb bag'},
+    {id:'s15', t:'Cherry tomatoes', q:'1 container'}]},
+  {group:'Fat', items:[
+    {id:'s16', t:'Almonds', q:'1 lb bag (lasts two weeks)'},
+    {id:'s17', t:'Olive oil', q:'only if the dial says to add it'}]}
+];
+
 const BODY_FIELDS = [  ['weight','Body weight (lb)'],['chest','Chest'],['waist','Waist'],['hips','Hips'],
   ['armL','Left arm'],['armR','Right arm'],['thighL','Left thigh'],['thighR','Right thigh'],
   ['calfL','Left calf'],['calfR','Right calf']
@@ -411,6 +436,8 @@ const blank = () => ({
   diet: {cuts:0, adds:0, lastChange:null},
   music: {},
   echo: 'Basement',
+  shop: [],
+  shopDate: null,
   live: null,
   nextDay: 0
 });
@@ -1006,15 +1033,43 @@ function renderFood(){
   }
   h += `</div>`;
 
+  /* weekly shop */
+  const shopN = SHOP.reduce((t,g) => t + g.items.length, 0);
+  const got = S.shop.length;
+  h += `<div class="sec"><h2>Weekly shop</h2>
+    <div class="note" style="margin-top:8px">${got} of ${shopN} picked up.
+      ${S.shopDate ? 'Last cleared ' + fmtDate(S.shopDate) + '.' : 'Same list every week \u2014 that\'s the design.'}</div>`;
+  SHOP.forEach(g => {
+    h += `<div class="row-name" style="font-size:13px;color:var(--muted);margin-top:16px">${esc(g.group)}</div>`;
+    g.items.forEach(it => {
+      const on = S.shop.includes(it.id);
+      h += `<div class="row ${on?'done':''}" onclick="toggleShop('${it.id}')" role="button" tabindex="0">
+        <div class="row-top"><span class="row-name">${on?'\u2713 ':''}${esc(it.t)}</span>
+        <span class="row-rx">${esc(it.q)}</span></div></div>`;
+    });
+  });
+  h += `<div class="btnrow"><button class="btn ghost slim" onclick="clearShop()">Start a new week</button></div></div>`;
+
   h += `<div class="sec"><h2>Worth remembering</h2>
     <div class="note" style="margin-top:8px">
       <p>Weigh the protein, eyeball everything else. Vegetables don't need measuring.</p>
       <p style="margin-top:8px">Never solve a stall by cutting protein — it's holding your muscle and feeding tendon repair at the same time.</p>
+      <p style="margin-top:8px">Sunday setup, about 20 minutes: boil the two dozen eggs, strip all three chickens, breast meat into containers. Everything else assembles in under two minutes when you eat it.</p>
       <p style="margin-top:8px">Walking is the other half of this. Aim for 8,000 steps on top of training \u2014 that's worth roughly 175 calories a day and takes about two months off the timeline without touching your food.</p>
       <p style="margin-top:8px">Recheck these targets around 220 lb. Maintenance falls as you do, so today's deficit becomes tomorrow's maintenance.</p>
     </div></div>`;
 
   el('v-food').innerHTML = h;
+}
+
+function toggleShop(id){
+  S.shop = S.shop.includes(id) ? S.shop.filter(x => x !== id) : S.shop.concat(id);
+  persist(); renderFood();
+}
+function clearShop(){
+  if(S.shop.length && !confirm('Clear every tick and start the week fresh?')) return;
+  S.shop = []; S.shopDate = today();
+  persist(); renderFood();
 }
 
 function toggleSlot(id){
@@ -1537,6 +1592,7 @@ document.querySelectorAll('nav button').forEach(b => {
   if(!S.calf) S.calf = {stage:0, streak:0, lastPain:null};
   if(!S.food) S.food = {};
   if(!S.diet) S.diet = {cuts:0, adds:0, lastChange:null};
+  if(!S.shop) S.shop = [];
   if(!S.music) S.music = {};
   /* 'Echo' was only ever a placeholder — upgrade it, but keep a real choice */
   if(!S.echo || S.echo === 'Echo') S.echo = 'Basement';
