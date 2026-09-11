@@ -206,7 +206,7 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 </nav>
 
 <script>
-const BUILD = 'v9';
+const BUILD = 'v13';
 const BUILT = '10 Sep 2026';
 
 /* =========================================================
@@ -334,6 +334,16 @@ const CARDIO_Q = {
   walk_easy:''
 };
 const demoURL = q => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
+
+/* Playlists shipped with the build. These only ever FILL A GAP — if you've
+   saved something for a day yourself, yours wins and is never overwritten. */
+const DEFAULT_MUSIC = {
+  0: {name:'Upper Push',   url:'https://music.amazon.com/my/playlists/c1628861-8dd4-496e-86fe-a568070fc448'},
+  1: {name:'Lower Heavy',  url:'https://music.amazon.com/my/playlists/5b0c4ce3-b29b-4014-b206-fa012732ac87'},
+  3: {name:'Intervals',    url:'https://music.amazon.com/my/playlists/a0a1cf36-b701-4ebd-a66d-504623f3efa9'},
+  4: {name:'Upper Pull',   url:'https://music.amazon.com/my/playlists/ba979495-e19b-4f3b-a5d2-19f4629bb4f3'},
+  5: {name:'Lower Steady', url:'https://music.amazon.com/my/playlists/02736b48-5091-4521-8255-2dbb9922bde3'}
+};
 const mondayIndex = () => (new Date().getDay() + 6) % 7;
 
 const CARDIO = {
@@ -346,7 +356,7 @@ const CARDIO = {
 };
 
 /* ---- nutrition: five fixed slots, no free-text logging ---- */
-const P_TARGET = 205, KCAL_TARGET = 2450;
+const P_TARGET = 205, KCAL_TARGET = 2260;
 const SLOTS = [
   {id:'m1', name:'Morning', p:44, kcal:485, items:[
     '1 cup low-fat cottage cheese','3 eggs, hard boiled','1 cup berries']},
@@ -354,21 +364,21 @@ const SLOTS = [
     '6 oz sliced deli turkey or ham','2 slices whole-grain bread','1 slice cheese','Baby carrots or cherry tomatoes']},
   {id:'m3', name:'Around training', p:26, kcal:225, items:[
     '1 scoop whey in water','1 banana']},
-  {id:'m4', name:'Evening', p:76, kcal:840, items:[
-    '8 oz rotisserie chicken breast','1 pouch microwave rice','1 bag frozen vegetables','1 tbsp olive oil over the vegetables']},
-  {id:'m5', name:'Late', p:30, kcal:390, items:[
-    '1 cup Greek yogurt 0%, or a 4 oz tuna pouch','1 oz almonds','1 apple']}
+  {id:'m4', name:'Evening', p:76, kcal:720, items:[
+    '8 oz rotisserie chicken breast','1 pouch microwave rice','1 bag frozen vegetables']},
+  {id:'m5', name:'Late', p:29, kcal:295, items:[
+    '1 cup Greek yogurt 0%, or a 4 oz tuna pouch','1 oz almonds']}
 ];
 /* the dial, in the order units come off and go back on */
 const CUTS = [
-  {label:'the olive oil at dinner', kcal:120},
+  {label:'half the rice pouch at dinner', kcal:150},
   {label:'the almonds in the late slot', kcal:165},
-  {label:'the apple in the late slot', kcal:95}
+  {label:'one slice of bread at midday', kcal:100}
 ];
 const ADDS = [
-  {label:'a second rice pouch at dinner', kcal:300},
-  {label:'a third slice of bread at midday', kcal:100},
-  {label:'an extra scoop of whey', kcal:120}
+  {label:'an apple in the late slot', kcal:95},
+  {label:'a tablespoon of olive oil at dinner', kcal:120},
+  {label:'a second rice pouch at dinner', kcal:300}
 ];
 
 /* ---- music: one playlist per training day ---- */
@@ -400,7 +410,7 @@ const blank = () => ({
   food: {},
   diet: {cuts:0, adds:0, lastChange:null},
   music: {},
-  echo: 'Echo',
+  echo: 'Basement',
   live: null,
   nextDay: 0
 });
@@ -559,7 +569,7 @@ function musicBlock(dayId){
     return `<div class="sec"><h2>Music</h2>
       <div class="note" style="margin-top:8px">No playlist set for this day yet. Build one called “${esc(g.suggest)}” in Amazon Music, then add it under Program → Music.</div></div>`;
   }
-  const line = `Alexa, play my ${m.name} playlist on ${S.echo || 'Echo'}`;
+  const line = `Alexa, play my ${m.name} playlist on ${S.echo || 'Basement'}`;
   let h = `<div class="sec"><h2>Music</h2>
     <div class="row t-cardio">
       <div class="row-top"><span class="row-name">${esc(m.name)}</span></div>
@@ -1000,6 +1010,7 @@ function renderFood(){
     <div class="note" style="margin-top:8px">
       <p>Weigh the protein, eyeball everything else. Vegetables don't need measuring.</p>
       <p style="margin-top:8px">Never solve a stall by cutting protein — it's holding your muscle and feeding tendon repair at the same time.</p>
+      <p style="margin-top:8px">Walking is the other half of this. Aim for 8,000 steps on top of training \u2014 that's worth roughly 175 calories a day and takes about two months off the timeline without touching your food.</p>
       <p style="margin-top:8px">Recheck these targets around 220 lb. Maintenance falls as you do, so today's deficit becomes tomorrow's maintenance.</p>
     </div></div>`;
 
@@ -1451,7 +1462,7 @@ function importData(){
 }
 
 function saveMusic(){
-  S.echo = el('mus-echo').value.trim() || 'Echo';
+  S.echo = el('mus-echo').value.trim() || 'Basement';
   DAYS.filter(d => !d.rest).forEach(d => {
     const n = el('mus-n-'+d.id).value.trim();
     const u = el('mus-u-'+d.id).value.trim();
@@ -1527,7 +1538,14 @@ document.querySelectorAll('nav button').forEach(b => {
   if(!S.food) S.food = {};
   if(!S.diet) S.diet = {cuts:0, adds:0, lastChange:null};
   if(!S.music) S.music = {};
-  if(!S.echo) S.echo = 'Echo';
+  /* 'Echo' was only ever a placeholder — upgrade it, but keep a real choice */
+  if(!S.echo || S.echo === 'Echo') S.echo = 'Basement';
+  /* fill only empty slots — never clobber a playlist the user has set */
+  Object.keys(DEFAULT_MUSIC).forEach(k => {
+    if(!S.music[k] || !(S.music[k].name || S.music[k].url)){
+      S.music[k] = Object.assign({}, DEFAULT_MUSIC[k]);
+    }
+  });
   /* migrating from the old 5-day rotation: re-anchor to the calendar week */
   S.nextDay = mondayIndex();
   seedStates();
