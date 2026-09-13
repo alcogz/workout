@@ -206,7 +206,7 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 </nav>
 
 <script>
-const BUILD = 'v17';
+const BUILD = 'v18';
 const BUILT = '10 Sep 2026';
 
 /* =========================================================
@@ -391,6 +391,23 @@ const MUSIC_GUIDE = {
   5:{suggest:'Lower Steady', vibe:'Steady 120–135 BPM — matched to walking cadence for the incline finish.'}
 };
 
+/* ---- Sunday prep and the thaw schedule ---- */
+const PREP = [
+  {id:'p1', t:'Boil two dozen eggs', d:'Cool them and put them back in the carton, unpeeled \u2014 they keep better in the shell. Covers Monday through Sunday.'},
+  {id:'p2', t:'Strip the rotisserie chickens', d:'All of them, today. Breast and dark meat both. You will not do it later in the week.'},
+  {id:'p3', t:'Fridge: three chicken dinners', d:'Monday, Tuesday and Wednesday. About 24 oz. Cooked chicken keeps three to four days.'},
+  {id:'p4', t:'Freeze: four chicken dinners', d:'Thursday through Sunday, in four separate 8 oz portions so you thaw only what you need.'},
+  {id:'p5', t:'Split the turkey', d:'Half the 3 lb to the fridge for Monday through Thursday lunches. Half into the freezer.'},
+  {id:'p6', t:'Bag five almond portions', d:'20 almonds each. Five, not seven \u2014 tuna nights skip the almonds.'},
+  {id:'p7', t:'Rinse the carrots and tomatoes', d:'Portion into seven bags if you want lunch to be pure assembly.'}
+];
+
+/* dayId \u2192 what comes out of the freezer that evening */
+const THAW = {
+  2: 'Move the frozen chicken to the fridge tonight \u2014 all four portions. They will be ready for tomorrow evening onward.',
+  3: 'Move the frozen turkey to the fridge tonight. Ready for Friday lunch.'
+};
+
 /* ---- weekly shop: quantities derived from the five slots ---- */
 const SHOP = [
   {group:'Protein', items:[
@@ -436,6 +453,8 @@ const blank = () => ({
   diet: {cuts:0, adds:0, lastChange:null},
   music: {},
   echo: 'Basement',
+  prep: [],
+  prepDate: null,
   shop: [],
   shopDate: null,
   live: null,
@@ -622,6 +641,10 @@ function renderToday(){
 
   h += `<div class="h">${day.day} — ${day.title}</div>`;
   h += `<div class="sub">${S.sessions.length} sessions logged${S.calf.lastPain ? ' · calf pain last flagged ' + fmtDate(S.calf.lastPain) : ''}</div>`;
+
+  if(THAW[day.id] && !S.live){
+    h += `<div class="notice"><b>Freezer.</b> ${esc(THAW[day.id])}</div>`;
+  }
 
   if(testDue()){
     h += `<div class="notice"><b>Heel raise test is due.</b> Do a max set of single-leg raises on each side before you train, and record both numbers under Progress.</div>`;
@@ -1033,6 +1056,20 @@ function renderFood(){
   }
   h += `</div>`;
 
+  /* Sunday prep */
+  const prepN = PREP.length, prepDone = S.prep.length;
+  h += `<div class="sec"><h2>Sunday prep</h2>
+    <div class="note" style="margin-top:8px">About 20 minutes. ${prepDone} of ${prepN} done.
+      ${S.prepDate ? 'Last run ' + fmtDate(S.prepDate) + '.' : 'This is what makes the week run itself.'}</div>`;
+  PREP.forEach(p => {
+    const on = S.prep.includes(p.id);
+    h += `<div class="row ${on?'done':''}" onclick="togglePrep('${p.id}')" role="button" tabindex="0">
+      <div class="row-top"><span class="row-name">${on?'\u2713 ':''}${esc(p.t)}</span></div>
+      <div class="row-detail">${esc(p.d)}</div></div>`;
+  });
+  h += `<div class="note" style="margin-top:14px"><b>Out of the freezer:</b> chicken on Wednesday night, turkey on Thursday night. The app reminds you on the day.</div>`;
+  h += `<div class="btnrow"><button class="btn ghost slim" onclick="clearPrep()">Start a new week</button></div></div>`;
+
   /* weekly shop */
   const shopN = SHOP.reduce((t,g) => t + g.items.length, 0);
   const got = S.shop.length;
@@ -1062,6 +1099,16 @@ function renderFood(){
     </div></div>`;
 
   el('v-food').innerHTML = h;
+}
+
+function togglePrep(id){
+  S.prep = S.prep.includes(id) ? S.prep.filter(x => x !== id) : S.prep.concat(id);
+  persist(); renderFood();
+}
+function clearPrep(){
+  if(S.prep.length && !confirm('Clear the prep list for a new week?')) return;
+  S.prep = []; S.prepDate = today();
+  persist(); renderFood();
 }
 
 function toggleShop(id){
@@ -1595,6 +1642,7 @@ document.querySelectorAll('nav button').forEach(b => {
   if(!S.food) S.food = {};
   if(!S.diet) S.diet = {cuts:0, adds:0, lastChange:null};
   if(!S.shop) S.shop = [];
+  if(!S.prep) S.prep = [];
   if(!S.music) S.music = {};
   /* 'Echo' was only ever a placeholder — upgrade it, but keep a real choice */
   if(!S.echo || S.echo === 'Echo') S.echo = 'Basement';
