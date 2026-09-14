@@ -1,7 +1,7 @@
-/* Rebuild — offline cache.
+/* The Comeback — offline cache.
    Network-first for the app itself, so a new upload lands on the next launch.
    Cache-first for everything else (fonts), so offline still works. */
-const CACHE = 'rebuild-v24';
+const CACHE = 'comeback-v26';
 const ASSETS = ['./', './index.html'];
 
 self.addEventListener('install', e => {

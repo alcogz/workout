@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rebuild — training log</title>
+<title>The Comeback</title>
 <meta name="theme-color" content="#E4E5E0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -211,7 +211,7 @@ nav button.on{color:var(--day);font-weight:700;border-top-color:var(--day)}
 <body>
 
 <header>
-  <div class="brand">Rebuild<span> · training log</span></div>
+  <div class="brand">The Comeback</div>
   <div class="stamp" id="stamp"></div>
 </header>
 
@@ -232,7 +232,7 @@ nav button.on{color:var(--day);font-weight:700;border-top-color:var(--day)}
 </nav>
 
 <script>
-const BUILD = 'v24';
+const BUILD = 'v26';
 const BUILT = '10 Sep 2026';
 
 /* =========================================================
@@ -897,7 +897,7 @@ function logPanel(it, idx){
       <th>RPE</th><th>Rest</th>${isCalf?'<th>Pain</th>':''}
     </tr></thead><tbody>`;
     sets.forEach((s,i)=>{
-      h += `<tr><td>${i+1}</td>`;
+      h += `<tr onclick="editLiveSet(${idx},${i})" style="cursor:pointer"><td>${i+1}</td>`;
       if(d && d.perSide) h += `<td>${s.side || '\u2014'}</td>`;
       if(isCardio) h += `<td>yes</td>`;
       else if(isHold) h += `<td>${s.reps}s</td>`;
@@ -906,8 +906,16 @@ function logPanel(it, idx){
       h += `<td>${s.rpe||'—'}</td><td>${s.rest?s.rest+'s':'—'}</td>`;
       if(isCalf) h += `<td class="${s.pain?'flag':''}">${s.pain?'yes':'no'}</td>`;
       h += `</tr>`;
+      if(liveEdit && liveEdit.idx === idx && liveEdit.k === i){
+        h += `<tr><td colspan="8">${editForm(existing, s, `<div class="btnrow">
+          <button class="btn blue slim" onclick="saveLiveEdit()">Save</button>
+          <button class="btn ghost slim" onclick="cancelLiveEdit()">Cancel</button>
+          <button class="btn ghost slim" onclick="deleteLiveSet()">Delete</button>
+        </div>`)}</td></tr>`;
+      }
     });
-    h += `</tbody></table>`;
+    h += `</tbody></table>
+      <div class="note" style="margin-top:6px">Tap a logged set to correct or remove it.</div>`;
   }
 
   if(isCardio && !CARDIO[it.cardio].fixed){
@@ -973,6 +981,37 @@ function logPanel(it, idx){
   return h;
 }
 
+let liveEdit = null;
+function editLiveSet(idx, k){
+  liveEdit = (liveEdit && liveEdit.idx === idx && liveEdit.k === k) ? null : {idx, k};
+  renderToday();
+}
+function cancelLiveEdit(){ liveEdit = null; renderToday(); }
+function saveLiveEdit(){
+  const en = S.live.entries.find(e => e.idx === liveEdit.idx);
+  if(!en) { liveEdit = null; return renderToday(); }
+  const set = en.sets[liveEdit.k];
+  const num = id => { const v = el(id) ? parseFloat(el(id).value) : NaN; return isNaN(v) ? 0 : v; };
+  if(el('e-w')) set.weight = num('e-w');
+  if(el('e-r')) set.reps = num('e-r');
+  set.rpe  = num('e-rpe') || null;
+  set.rest = num('e-rest') || null;
+  if(el('e-tempo')) set.tempo = el('e-tempo').value.trim();
+  if(el('e-notes')) set.notes = el('e-notes').value.trim();
+  if(el('e-pain'))  set.pain  = el('e-pain').checked;
+  if(el('e-side'))  set.side  = el('e-side').value;
+  liveEdit = null; persist(); renderToday();
+}
+function deleteLiveSet(){
+  if(!confirm('Delete this set?')) return;
+  const ei = S.live.entries.findIndex(e => e.idx === liveEdit.idx);
+  if(ei > -1){
+    S.live.entries[ei].sets.splice(liveEdit.k, 1);
+    if(!S.live.entries[ei].sets.length) S.live.entries.splice(ei, 1);
+  }
+  liveEdit = null; persist(); renderToday();
+}
+
 function restGuess(){
   if(!S.live || !S.live.lastSetAt) return '';
   return Math.round((Date.now() - S.live.lastSetAt)/1000);
@@ -992,8 +1031,8 @@ function cancelSession(){
   if(!confirm('Discard this session? Nothing gets saved.')) return;
   S.live = null; persist(); renderToday();
 }
-function openItem(i){ S.live.openIdx = i; persist(); renderToday(); window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'}); }
-function closeItem(){ S.live.openIdx = null; persist(); renderToday(); }
+function openItem(i){ liveEdit = null; S.live.openIdx = i; persist(); renderToday(); window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'}); }
+function closeItem(){ liveEdit = null; S.live.openIdx = null; persist(); renderToday(); }
 
 function entryFor(idx){
   const it = DAYS[S.live.dayId].items[idx];
@@ -1022,6 +1061,7 @@ function saveSet(idx){
     pain: el('i-pain') ? el('i-pain').checked : false
   });
   S.live.lastSetAt = Date.now();
+  liveEdit = null;
   persist(); renderToday();
 }
 
@@ -1468,7 +1508,7 @@ function deleteSession(s){
   persist(); renderProgress();
 }
 
-function editForm(en, set){
+function editForm(en, set, actions){
   const d = en.exId ? EX[en.exId] : null;
   const isHold = d && d.hold, isBW = d && d.bw, isCardio = en.kind === 'cardio';
   const isCalf = en.kind === 'calf' || (d && d.calf);
@@ -1501,11 +1541,11 @@ function editForm(en, set){
   }
   h += `<div class="f" style="margin-top:9px"><label>Notes</label><input id="e-notes" value="${esc(set.notes||'')}"></div>`;
   if(isCalf) h += `<label class="check"><input type="checkbox" id="e-pain" ${set.pain?'checked':''}> Pain flagged</label>`;
-  h += `<div class="btnrow">
+  h += (actions || `<div class="btnrow">
       <button class="btn blue slim" onclick="event.stopPropagation();saveEdit()">Save</button>
       <button class="btn ghost slim" onclick="event.stopPropagation();cancelEdit()">Cancel</button>
       <button class="btn ghost slim" onclick="event.stopPropagation();deleteSet(${editing.s},${editing.e},${editing.k})">Delete</button>
-    </div></div>`;
+    </div>`) + `</div>`;
   return h;
 }
 
@@ -1695,7 +1735,7 @@ function importData(){
     catch(e){ alert("That file couldn't be read. Pick the .json file the export button produced."); return; }
 
     if(!d || typeof d !== 'object' || !Array.isArray(d.sessions) || !Array.isArray(d.body)){
-      alert("That doesn't look like a Rebuild backup."); return;
+      alert("That doesn't look like a Comeback backup."); return;
     }
     const msg = `This backup holds:\n\n`
       + `  ${d.sessions.length} sessions\n`
@@ -1774,7 +1814,7 @@ function exportData(){
   try{
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rebuild-backup-${today()}.json`;
+    a.download = `comeback-backup-${today()}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1834,7 +1874,7 @@ document.querySelectorAll('nav button').forEach(b => {
 (function(){
   const icon = 'data:image/svg+xml,' + encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" fill="#1E2427"/><rect x="34" y="52" width="124" height="18" rx="3" fill="#1F5673"/><rect x="34" y="87" width="86" height="18" rx="3" fill="#9A6B2F"/><rect x="34" y="122" width="124" height="18" rx="3" fill="#E4E5E0"/></svg>`);
-  const m = {name:'Rebuild — training log', short_name:'Rebuild', start_url:'.', display:'standalone',
+  const m = {name:'The Comeback', short_name:'Comeback', start_url:'.', display:'standalone',
     background_color:'#E4E5E0', theme_color:'#E4E5E0',
     icons:[{src:icon, sizes:'192x192', type:'image/svg+xml', purpose:'any'}]};
   document.getElementById('mf').href = URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/json'}));
