@@ -206,7 +206,7 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 </nav>
 
 <script>
-const BUILD = 'v23';
+const BUILD = 'v23.1';
 const BUILT = '10 Sep 2026';
 
 /* =========================================================
@@ -1147,6 +1147,7 @@ function renderFood(){
     h += `<div class="row ${on?'done':''}" onclick="toggleSlot('${s.id}')" role="button" tabindex="0">
       <div class="row-top"><span class="row-name">${on?'✓ ':''}${esc(s.name)}</span>
         <span class="row-rx">${s.p} g · ${s.kcal} cal</span></div>
+      <div class="row-detail" style="color:var(--left);font-weight:600">${esc(tmap[s.id])}</div>
       <div class="row-detail">${s.items.map(esc).join(' · ')}</div></div>`;
   });
   h += `</div>`;
@@ -1548,7 +1549,7 @@ let chartField = 'weight';
 function pickChart(v){ chartField = v; renderProgress(); }
 
 function barHTML(side, val, max, cls, unit){
-  const pct = max ? Math.max(4, val/max*100) : 4;
+  const pct = (!val || !max) ? 0 : Math.max(4, val/max*100);
   return `<div class="bar"><span class="side">${side}</span>
     <div class="track"><div class="fill ${cls}" style="width:${pct}%"></div></div>
     <span class="val">${val}${unit}</span></div>`;
