@@ -206,7 +206,7 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 </nav>
 
 <script>
-const BUILD = 'v18';
+const BUILD = 'v23';
 const BUILT = '10 Sep 2026';
 
 /* =========================================================
@@ -358,17 +358,50 @@ const CARDIO = {
 /* ---- nutrition: five fixed slots, no free-text logging ---- */
 const P_TARGET = 205, KCAL_TARGET = 2260;
 const SLOTS = [
-  {id:'m3', name:'Post-workout', time:'5:00\u20135:30 am', p:26, kcal:225, items:[
-    '1 scoop whey in water','1 banana']},
-  {id:'m1', name:'Breakfast', time:'7:00\u20138:00 am', p:45, kcal:405, items:[
-    '1 scoop whey in water','3 eggs, hard boiled','1 cup berries']},
-  {id:'m2', name:'Lunch', time:'12:00\u20131:00 pm', p:59, kcal:515, items:[
+  {id:'m3', name:'Post-workout', off:15,  win:30, p:26, kcal:225, items:[
+    '1 whey shake \u2014 1 scoop in 8 oz cold water','1 banana']},
+  {id:'m1', name:'Breakfast', off:120, win:60, p:45, kcal:405, items:[
+    '1 whey shake \u2014 1 scoop in 8 oz cold water','3 eggs, hard boiled','1 cup berries']},
+  {id:'m2', name:'Lunch', off:420, win:60, cap:900, p:59, kcal:515, items:[
     '6 oz Just Turkey, sliced thick','3 slices whole wheat','1 slice Lacey Swiss','Baby carrots or grape tomatoes']},
-  {id:'m4', name:'Dinner', time:'5:30\u20136:30 pm', p:76, kcal:720, items:[
+  {id:'m4', name:'Dinner', off:750, win:60, cap:1140, p:76, kcal:720, items:[
     '8 oz rotisserie chicken breast','1 pouch microwave rice','1 bag frozen vegetables']},
-  {id:'m5', name:'Evening', time:'7:30\u20138:00 pm', p:31, kcal:380, items:[
-    '1 scoop whey + 1 oz almonds (about 20) \u2014 five nights','or 1 full can of tuna, no almonds \u2014 two nights','1 apple']}
+  {id:'m5', name:'Evening', off:870, win:30, cap:1230, p:31, kcal:380, items:[
+    '1 whey shake + 1 oz almonds (about 20) \u2014 five nights','or 1 full can of tuna, no almonds \u2014 two nights','1 apple']}
 ];
+
+/* meal times derive from when training finished.
+   Offsets shift the whole day, caps stop a late start pushing dinner to 10pm,
+   and a 60-minute floor keeps two meals from colliding after a cap bites. */
+const DEFAULT_FINISH = '05:00';
+const hm2min = s => { const [a,b] = String(s).split(':').map(Number); return a*60 + (b||0); };
+const min2hm = m => {
+  m = ((Math.round(m) % 1440) + 1440) % 1440;
+  const h24 = Math.floor(m/60), mm = m % 60;
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h}:${String(mm).padStart(2,'0')} ${h24 < 12 ? 'am' : 'pm'}`;
+};
+function mealTimes(){
+  const anchor = (S.anchor && S.anchor.date === today() && S.anchor.time) ? S.anchor.time : DEFAULT_FINISH;
+  const base = hm2min(anchor);
+  /* the plan assumes morning training. Past 11am the later meals stop tracking
+     the workout — you should already have eaten them — so they hold their
+     normal times and the app says so. */
+  const late = base > 660;
+  const lateBase = hm2min(DEFAULT_FINISH);
+  let prev = -999;
+  const out = SLOTS.map(s => {
+    const b = (late && s.cap != null) ? lateBase : base;
+    let start = b + s.off;
+    if(s.cap != null) start = Math.min(start, s.cap);
+    if(!(late && s.cap != null) && start < prev + 60) start = prev + 60;
+    if(!(late && s.cap != null)) prev = start;
+    return {id:s.id, start, label:`${min2hm(start)}\u2013${min2hm(start + s.win)}`};
+  });
+  const last = out[out.length-1];
+  return {anchor, times:out, late,
+          tight: !late && last.start + SLOTS[SLOTS.length-1].win > 1260};
+}
 
 /* the dial, in the order units come off and go back on */
 const CUTS = [
@@ -455,13 +488,20 @@ const blank = () => ({
   echo: 'Basement',
   prep: [],
   prepDate: null,
+  anchor: null,
+  dayPick: null,
   shop: [],
   shopDate: null,
   live: null,
   nextDay: 0
 });
 
-function today(){ return new Date().toISOString().slice(0,10); }
+function today(){
+  /* local calendar date, NOT toISOString() — that returns UTC and stamps
+     anything logged after 8pm Eastern with tomorrow's date */
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function fmtDate(d){
   const [y,m,dd] = d.split('-');
   return new Date(y, m-1, dd).toLocaleDateString(undefined,{month:'short',day:'numeric'});
@@ -470,7 +510,7 @@ function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000)
 function round5(n){ return Math.max(10, Math.round(n/5)*5); }
 
 function exState(id){
-  if(!S.exState[id]) S.exState[id] = {load: EX[id].start, streak:0, fails:0};
+  if(!S.exState[id]) S.exState[id] = {load: EX[id].start, fails:0};
   const s = S.exState[id];
   /* rep targets live in saved state, not the program constant, so that
      progression on planks and bodyweight work survives a page reload */
@@ -506,7 +546,6 @@ function evaluate(session){
 
       const painHit = d.calf && sets.some(s => s.pain);
       if(painHit){
-        st.streak = 0;
         changes.push({t:'hold', txt:`${d.name} held at ${st.load} lb — you flagged pain.`});
         return;
       }
@@ -589,11 +628,44 @@ function evaluate(session){
   return changes;
 }
 
+/* Recompute every derived target by replaying the whole session history.
+   Progression used to be a running mutation, so deleting or editing a session
+   left the load it had earned standing with no way to walk it back. */
+function replayAll(){
+  S.exState = {};
+  S.cardioState = {};
+  S.calf = {stage:0, streak:0, lastPain:null};
+  seedStates();
+  const ordered = S.sessions.slice().sort((a,b) =>
+    a.date === b.date ? 0 : (a.date < b.date ? -1 : 1));
+  ordered.forEach(s => evaluate(s));
+}
+
+function loadSnapshot(){
+  const snap = {};
+  Object.keys(EX).forEach(id => {
+    const st = exState(id);
+    snap[id] = EX[id].bw || EX[id].hold ? `${st.lo}\u2013${st.hi}` : `${st.load} lb`;
+  });
+  Object.keys(S.cardioState).forEach(id => snap['cardio:'+id] = String(S.cardioState[id].level));
+  snap['calf stage'] = String(S.calf.stage);
+  return snap;
+}
+
+function diffSnapshots(before, after){
+  const rows = [];
+  Object.keys(after).forEach(k => {
+    if(before[k] !== after[k]) rows.push([k, before[k], after[k]]);
+  });
+  return rows;
+}
+
 /* =========================================================
    RENDER — TODAY
    ========================================================= */
 const el = id => document.getElementById(id);
-const esc = s => String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc = s => String(s??'').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function testDue(){
   const last = S.tests.length ? S.tests[S.tests.length-1].date : S.started;
@@ -615,22 +687,46 @@ function musicBlock(dayId){
     return `<div class="sec"><h2>Music</h2>
       <div class="note" style="margin-top:8px">No playlist set for this day yet. Build one called “${esc(g.suggest)}” in Amazon Music, then add it under Program → Music.</div></div>`;
   }
-  const line = `Alexa, play my ${m.name} playlist on ${S.echo || 'Basement'}`;
+  const line = voiceLine(dayId);
   let h = `<div class="sec"><h2>Music</h2>
     <div class="row t-cardio">
       <div class="row-top"><span class="row-name">${esc(m.name)}</span></div>
       <div class="row-detail">Say it out loud — the Echo is wired to the speaker, so this plays straight through it.</div>
-      <div class="voice" onclick="copyLine(this, ${JSON.stringify(line).replace(/"/g,'&quot;')})">“${esc(line)}”</div>`;
+      <div class="voice" onclick="copyDay(this, ${dayId})">“${esc(line)}”</div>`;
   if(m.url) h += `<a class="demo" href="${esc(m.url)}" target="_blank" rel="noopener">Open in Amazon Music instead</a>`;
   h += `</div></div>`;
   return h;
 }
 
-function copyLine(node, text){
-  navigator.clipboard && navigator.clipboard.writeText(text);
-  const was = node.textContent;
-  node.textContent = 'Copied';
-  setTimeout(() => { node.textContent = was; }, 1200);
+function voiceLine(dayId){
+  const m = S.music[dayId];
+  return m && m.name ? `Alexa, play my ${m.name} playlist on ${S.echo || 'Basement'}` : '';
+}
+
+let copyT = null;
+async function copyDay(node, dayId){
+  const text = voiceLine(dayId);
+  if(!text) return;
+  if(node.dataset.orig === undefined) node.dataset.orig = node.textContent;
+  let ok = false;
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    }else{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly','');
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, text.length);
+      ok = document.execCommand('copy');
+      ta.remove();
+    }
+  }catch(e){ ok = false; }
+  clearTimeout(copyT);
+  node.textContent = ok ? 'Copied' : 'Press and hold to copy';
+  copyT = setTimeout(() => { node.textContent = node.dataset.orig; }, 1400);
 }
 
 function renderToday(){
@@ -792,7 +888,11 @@ function logPanel(it, idx){
     const isHold = d && d.hold, isBW = d && d.bw;
     const perSide = d && d.perSide;
     const defR = it.calf ? CALF_STAGES[S.calf.stage].reps : st.hi;
-    const nextSide = sets.length ? (sets[sets.length-1].side === 'L' ? 'R' : 'L') : 'L';
+    const last = sets.length ? sets[sets.length-1] : null;
+    const nextSide = last ? (last.side === 'L' ? 'R' : 'L') : 'L';
+    /* carry forward what was actually lifted, not what was programmed */
+    const preW = last && last.weight ? last.weight : (st ? st.load : '');
+    const preR = last && last.reps   ? last.reps   : defR;
 
     if(perSide){
       h += `<div class="f" style="margin-top:12px"><label>Side</label>
@@ -804,18 +904,18 @@ function logPanel(it, idx){
 
     if(isHold){
       h += `<div class="grid2" style="margin-top:12px">
-        <div class="f"><label>Hold (seconds)</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
+        <div class="f"><label>Hold (seconds)</label><input id="i-r" type="number" inputmode="numeric" value="${preR}"></div>
         <div class="f"><label>RPE</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
       </div>`;
     } else if(isBW){
       h += `<div class="grid2" style="margin-top:12px">
-        <div class="f"><label>Reps</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
+        <div class="f"><label>Reps</label><input id="i-r" type="number" inputmode="numeric" value="${preR}"></div>
         <div class="f"><label>RPE</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
       </div>`;
     } else {
       h += `<div class="grid3" style="margin-top:12px">
-        <div class="f"><label>Weight (lb)</label><input id="i-w" type="number" inputmode="decimal" value="${st ? st.load : ''}"></div>
-        <div class="f"><label>Reps</label><input id="i-r" type="number" inputmode="numeric" value="${defR}"></div>
+        <div class="f"><label>Weight (lb)</label><input id="i-w" type="number" inputmode="decimal" value="${preW}"></div>
+        <div class="f"><label>Reps</label><input id="i-r" type="number" inputmode="numeric" value="${preR}"></div>
         <div class="f"><label>RPE</label><input id="i-rpe" type="number" min="1" max="10" inputmode="numeric" placeholder="7"></div>
       </div>`;
     }
@@ -846,6 +946,7 @@ function startSession(){
 }
 function pickDay(v){
   S.nextDay = parseInt(v);
+  S.dayPick = {d: today(), wd: S.nextDay};
   persist(); renderToday();
 }
 function cancelSession(){
@@ -906,6 +1007,7 @@ function finishSession(){
   const changes = evaluate(sess);
   S.sessions.push(sess);
   S.nextDay = mondayIndex();
+  S.dayPick = null;
   S.live = null;
   persist();
 
@@ -1032,7 +1134,14 @@ function renderFood(){
   h += `<div class="delta"><span>${short > 0 ? 'Protein still to go' : 'Protein target met'}</span>
     <b>${short > 0 ? short + ' g' : 'done'}</b></div></div>`;
 
-  h += `<div class="sec"><h2>The slots</h2>`;
+  const MT = mealTimes();
+  const tmap = {}; MT.times.forEach(t => tmap[t.id] = t.label);
+
+  h += `<div class="sec"><h2>The slots</h2>
+    <div class="f" style="margin-top:10px"><label>What time did you finish training today?</label>
+      <input id="anchor" type="time" value="${MT.anchor}" onchange="setAnchor(this.value)"></div>`;
+  if(MT.late) h += `<div class="notice hot">You trained late today. The plan is built around a morning session, so lunch, dinner and the evening slot keep their usual times \u2014 eat whichever ones you have not had yet.</div>`;
+  else if(MT.tight) h += `<div class="notice hot">A late start pushes the evening slot close to bedtime. Consider merging it into dinner today rather than eating at 9pm.</div>`;
   SLOTS.forEach(s => {
     const on = ticked.includes(s.id);
     h += `<div class="row ${on?'done':''}" onclick="toggleSlot('${s.id}')" role="button" tabindex="0">
@@ -1093,12 +1202,18 @@ function renderFood(){
       <p style="margin-top:8px">The real constraint is sleep. A 4am start means lights out by 8:30pm for seven and a half hours, and sleep does more for muscle and tendon repair than any meal timing decision. If the early alarm costs you sleep, it is a bad trade.</p>
       <p style="margin-top:8px">Weigh the protein, eyeball everything else. Vegetables don't need measuring.</p>
       <p style="margin-top:8px">Never solve a stall by cutting protein — it's holding your muscle and feeding tendon repair at the same time.</p>
-      <p style="margin-top:8px">Sunday setup, about 20 minutes: boil the two dozen eggs, strip all three chickens, breast meat into containers. Keep tuna to 3\u20134 nights a week \u2014 chunk light, not albacore \u2014 and use a second scoop of whey on the other nights. Everything else assembles in under two minutes when you eat it.</p>
+      <p style="margin-top:8px">Sunday setup, about 20 minutes: boil the two dozen eggs, strip all three chickens, breast meat into containers. Keep tuna to 3\u20134 nights a week \u2014 chunk light, not albacore \u2014 and have a whey shake on the other nights. Everything else assembles in under two minutes when you eat it.</p>
       <p style="margin-top:8px">Walking is the other half of this. Aim for 8,000 steps on top of training \u2014 that's worth roughly 175 calories a day and takes about two months off the timeline without touching your food.</p>
       <p style="margin-top:8px">Recheck these targets around 220 lb. Maintenance falls as you do, so today's deficit becomes tomorrow's maintenance.</p>
     </div></div>`;
 
   el('v-food').innerHTML = h;
+}
+
+function setAnchor(v){
+  if(!v) return;
+  S.anchor = {date: today(), time: v};
+  persist(); renderFood();
 }
 
 function togglePrep(id){
@@ -1289,6 +1404,7 @@ function saveEdit(){
   if(el('e-pain'))  set.pain  = el('e-pain').checked;
   if(el('e-side'))  set.side  = el('e-side').value;
   recalcVolume(S.sessions[s]);
+  replayAll();
   editing = null; persist(); renderProgress();
 }
 
@@ -1299,12 +1415,14 @@ function deleteSet(s,e,k){
   if(!sess.entries[e].sets.length) sess.entries.splice(e,1);
   if(!sess.entries.length){ S.sessions.splice(s,1); openSession = null; }
   else recalcVolume(sess);
+  replayAll();
   editing = null; persist(); renderProgress();
 }
 
 function deleteSession(s){
   if(!confirm('Delete this whole session? Everything logged in it goes with it.')) return;
   S.sessions.splice(s,1);
+  replayAll();
   openSession = null; editing = null;
   persist(); renderProgress();
 }
@@ -1443,19 +1561,6 @@ function saveTest(){
   persist(); renderProgress(); renderToday();
 }
 
-function lineSVG(vals){
-  const W=300,H=90,p=6;
-  const min=Math.min(...vals), max=Math.max(...vals), rng=(max-min)||1;
-  const pts = vals.map((v,i)=>{
-    const x = p + i*(W-2*p)/Math.max(1,vals.length-1);
-    const y = H-p - ((v-min)/rng)*(H-2*p);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:90px">
-    <polyline points="${pts}" fill="none" stroke="#1F5673" stroke-width="2" stroke-linejoin="round"/>
-  </svg>
-  <div class="note" style="margin-top:6px">${min} to ${max} lb over ${vals.length} entries</div>`;
-}
 
 function barSVG(vals){
   const W=300,H=90,n=vals.length,max=Math.max(...vals)||1;
@@ -1520,9 +1625,15 @@ function renderProgram(){
       <button class="btn ghost slim" onclick="exportData()">Export backup</button>
       <button class="btn ghost slim" onclick="importData()">Load backup</button>
     </div>
+    <div id="rawbackup"></div>
     <div class="btnrow">
       <button class="btn ghost slim" onclick="resetData()">Erase everything</button>
     </div></div>`;
+
+  h += `<div class="sec"><h2>Recheck targets</h2>
+    <div class="note" style="margin-top:8px">Replays every logged session in order and recomputes your working loads from scratch. Nothing logged is changed \u2014 only the targets derived from it.</div>
+    <div class="btnrow"><button class="btn ghost slim" onclick="reconcile()">Recheck against history</button></div>
+    <div id="reconcile"></div></div>`;
 
   h += `<div class="sec"><h2>Build</h2>
     <div class="note" style="margin-top:8px">Running <b style="color:var(--left)">${BUILD}</b>, built ${BUILT}. This also shows in the header on every screen \u2014 if it doesn't match the newest build, you're looking at a cached copy.</div>
@@ -1592,12 +1703,57 @@ async function forceFresh(){
   location.replace(location.pathname + '?fresh=' + Date.now());
 }
 
+function reconcile(){
+  const before = loadSnapshot();
+  replayAll();
+  const after = loadSnapshot();
+  const rows = diffSnapshots(before, after);
+  persist();
+  const box = el('reconcile');
+  if(!box) return;
+  if(!rows.length){
+    box.innerHTML = `<div class="notice good">Everything already matches your logged history. Nothing changed.</div>`;
+  }else{
+    box.innerHTML = `<div class="notice hot">${rows.length} target${rows.length>1?'s':''} corrected against history.</div>`
+      + `<table class="sets" style="margin-top:10px"><thead><tr><th>Target</th><th>Was</th><th>Now</th></tr></thead><tbody>`
+      + rows.map(r => {
+          const nm = r[0].startsWith('cardio:') ? CARDIO[r[0].slice(7)].name
+                   : (EX[r[0]] ? EX[r[0]].name : r[0]);
+          return `<tr><td>${esc(nm)}</td><td>${esc(r[1])}</td><td><b>${esc(r[2])}</b></td></tr>`;
+        }).join('')
+      + `</tbody></table>`;
+  }
+  renderToday(); renderProgress();
+}
+
 function exportData(){
-  const blob = new Blob([JSON.stringify(S,null,2)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `rebuild-backup-${today()}.json`;
-  a.click();
+  const json = JSON.stringify(S, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  try{
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rebuild-backup-${today()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }catch(e){ showRawBackup(json); return; }
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  /* the download can be silently ignored in standalone / sandboxed contexts,
+     so always offer the copyable fallback too */
+  showRawBackup(json, true);
+}
+
+function showRawBackup(json, quiet){
+  const box = el('rawbackup');
+  if(!box) return;
+  box.innerHTML = `<div class="note" style="margin-top:10px">
+      ${quiet ? 'If no file downloaded, copy this text and save it as a .json file.'
+              : 'Download was blocked. Copy this text and save it as a .json file.'}
+    </div>
+    <textarea readonly style="width:100%;height:120px;margin-top:8px;font-size:12px;
+      border:1px solid var(--rule);border-radius:4px;padding:8px;background:var(--paper)"
+      onclick="this.select()">${esc(json)}</textarea>`;
 }
 function resetData(){
   if(!confirm('Erase every session, measurement and test? This cannot be undone.')) return;
@@ -1612,6 +1768,16 @@ function renderAll(){
     new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
   renderToday(); renderFood(); renderBody(); renderProgress(); renderProgram();
 }
+
+/* rows advertise role="button"; make Enter and Space actually work */
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Enter' && e.key !== ' ') return;
+  const t = e.target;
+  if(t && t.getAttribute && t.getAttribute('role') === 'button' && t.onclick){
+    e.preventDefault();
+    t.click();
+  }
+});
 
 document.querySelectorAll('nav button').forEach(b => {
   b.onclick = () => {
@@ -1643,6 +1809,7 @@ document.querySelectorAll('nav button').forEach(b => {
   if(!S.diet) S.diet = {cuts:0, adds:0, lastChange:null};
   if(!S.shop) S.shop = [];
   if(!S.prep) S.prep = [];
+  if(!S.anchor) S.anchor = null;
   if(!S.music) S.music = {};
   /* 'Echo' was only ever a placeholder — upgrade it, but keep a real choice */
   if(!S.echo || S.echo === 'Echo') S.echo = 'Basement';
@@ -1652,8 +1819,9 @@ document.querySelectorAll('nav button').forEach(b => {
       S.music[k] = Object.assign({}, DEFAULT_MUSIC[k]);
     }
   });
-  /* migrating from the old 5-day rotation: re-anchor to the calendar week */
-  S.nextDay = mondayIndex();
+  /* the day pick is honoured only on the day it was made */
+  if(!S.dayPick || S.dayPick.d !== today()) S.nextDay = mondayIndex();
+  else S.nextDay = S.dayPick.wd;
   seedStates();
   persist();
   renderAll();
