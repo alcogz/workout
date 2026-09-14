@@ -24,6 +24,23 @@
   --warn:#8C3A2B;
   --ok:#3E6B52;
   --pad:16px;
+
+  /* the week, warm to cool. Desaturated so they sit on paper without shouting. */
+  --c-push:#A34534;    /* Monday   — rust */
+  --c-lower:#1F5673;   /* Tuesday  — deep blue */
+  --c-cond:#2E7D6F;    /* Thursday — teal */
+  --c-pull:#63507E;    /* Friday   — plum */
+  --c-steady:#9A6B2F;  /* Saturday — bronze */
+  --c-rest:#7C8480;    /* rest days */
+
+  /* the day, sunrise to dusk */
+  --m-post:#2E7D6F;
+  --m-break:#B08430;
+  --m-lunch:#9A6B2F;
+  --m-dinner:#A34534;
+  --m-eve:#63507E;
+
+  --day:#1F5673;       /* set at runtime to whichever day is showing */
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -45,13 +62,17 @@ button,input,select,textarea{font:inherit;color:inherit;font-variant-numeric:tab
 header{
   position:sticky;top:0;z-index:20;
   background:var(--paper);
-  border-bottom:1px solid var(--rule);
+  border-bottom:3px solid var(--day);
   padding:calc(10px + env(safe-area-inset-top)) var(--pad) 10px;
   display:flex;align-items:baseline;justify-content:space-between;gap:12px;
 }
 .brand{font-weight:700;font-size:19px;letter-spacing:-0.02em}
 .brand span{font-weight:400;color:var(--muted)}
 .stamp{font-size:13px;color:var(--muted);white-space:nowrap}
+.vchip{
+  display:inline-block;background:var(--day);color:var(--paper);
+  padding:2px 7px;border-radius:3px;font-weight:700;font-size:12px;letter-spacing:.02em;
+}
 
 main{padding:var(--pad) var(--pad) 8px;max-width:640px;margin:0 auto}
 .view{display:none}
@@ -61,27 +82,32 @@ main{padding:var(--pad) var(--pad) 8px;max-width:640px;margin:0 auto}
 .h{font-size:22px;font-weight:700;letter-spacing:-0.02em;line-height:1.2}
 .sub{color:var(--muted);font-size:14px;margin-top:2px}
 .sec{margin-top:26px}
-.sec > h2{font-size:15px;font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.sec > h2{
+  font-size:15px;font-weight:600;padding-bottom:6px;
+  border-bottom:2px solid var(--day);
+}
+.h{color:var(--ink)}
+.h .daytag{color:var(--day)}
 .note{font-size:13.5px;color:var(--muted);line-height:1.5}
 
 /* ---------- exercise rows: left spine encodes progression track ---------- */
 .row{
-  border-left:3px solid var(--ink);
+  border-left:4px solid var(--day);
   background:var(--raise);
   padding:11px 12px;
   margin-top:8px;
   border-radius:0 4px 4px 0;
 }
-.row.t-left{border-left-color:var(--left)}
-.row.t-right{border-left-color:var(--right)}
-.row.t-cardio{border-left-color:var(--muted)}
+.row.t-left{border-left-color:var(--c-lower)}
+.row.t-right{border-left-color:var(--c-steady)}
+.row.t-cardio{border-left-color:var(--c-rest)}
 .row.done{background:var(--sink);opacity:.62}
 .row-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .row-name{font-weight:600;font-size:15.5px;letter-spacing:-0.01em}
 .row-rx{font-size:14px;color:var(--muted);white-space:nowrap}
 .row-detail{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
 .demo{
-  display:inline-block;margin-top:7px;font-size:12.5px;color:var(--left);
+  display:inline-block;margin-top:7px;font-size:12.5px;color:var(--day);
   text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;
 }
 .demo:hover{color:var(--ink)}
@@ -95,11 +121,11 @@ main{padding:var(--pad) var(--pad) 8px;max-width:640px;margin:0 auto}
 /* ---------- buttons ---------- */
 button{border:0;background:none;cursor:pointer;border-radius:4px}
 .btn{
-  background:var(--ink);color:var(--paper);
+  background:var(--day);color:var(--paper);
   padding:13px 18px;font-weight:600;font-size:15px;width:100%;
 }
 .btn.ghost{background:none;border:1px solid var(--rule);color:var(--ink)}
-.btn.blue{background:var(--left);color:#fff}
+.btn.blue{background:var(--day);color:#fff}
 .btn.slim{padding:9px 14px;font-size:14px;width:auto}
 .btn:disabled{opacity:.4}
 .btnrow{display:flex;gap:8px;margin-top:12px}
@@ -173,7 +199,7 @@ nav{
   padding-bottom:env(safe-area-inset-bottom);
 }
 nav button{padding:14px 2px 15px;font-size:12.5px;color:var(--muted);border-radius:0;border-top:2px solid transparent;margin-top:-1px}
-nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
+nav button.on{color:var(--day);font-weight:700;border-top-color:var(--day)}
 
 .empty{color:var(--muted);font-size:14px;padding:18px 0;line-height:1.5}
 .hist{border-bottom:1px solid var(--rule);padding:10px 0;font-size:14px;display:flex;justify-content:space-between;gap:10px}
@@ -206,7 +232,7 @@ nav button.on{color:var(--ink);font-weight:600;border-top-color:var(--ink)}
 </nav>
 
 <script>
-const BUILD = 'v23.1';
+const BUILD = 'v24';
 const BUILT = '10 Sep 2026';
 
 /* =========================================================
@@ -345,6 +371,18 @@ const DEFAULT_MUSIC = {
   5: {name:'Lower Steady', url:'https://music.amazon.com/my/playlists/02736b48-5091-4521-8255-2dbb9922bde3'}
 };
 const mondayIndex = () => (new Date().getDay() + 6) % 7;
+
+const DAY_TINT = {
+  0:'var(--c-push)', 1:'var(--c-lower)', 2:'var(--c-rest)', 3:'var(--c-cond)',
+  4:'var(--c-pull)', 5:'var(--c-steady)', 6:'var(--c-rest)'
+};
+const SLOT_TINT = {
+  m3:'var(--m-post)', m1:'var(--m-break)', m2:'var(--m-lunch)',
+  m4:'var(--m-dinner)', m5:'var(--m-eve)'
+};
+function setDayTint(id){
+  document.documentElement.style.setProperty('--day', DAY_TINT[id] || 'var(--c-lower)');
+}
 
 const CARDIO = {
   max5:      {name:'Max Trainer intervals', unit:'intervals', start:6, inc:1, cap:12,
@@ -735,7 +773,8 @@ function renderToday(){
   const day = DAYS[S.live ? S.live.dayId : S.nextDay];
   let h = '';
 
-  h += `<div class="h">${day.day} — ${day.title}</div>`;
+  setDayTint(day.id);
+  h += `<div class="h"><span class="daytag">${day.day}</span> — ${day.title}</div>`;
   h += `<div class="sub">${S.sessions.length} sessions logged${S.calf.lastPain ? ' · calf pain last flagged ' + fmtDate(S.calf.lastPain) : ''}</div>`;
 
   if(THAW[day.id] && !S.live){
@@ -825,12 +864,12 @@ function itemMeta(it){
   };
 }
 
-function rowHTML(it, done, idx){
+function rowHTML(it, done, idx, tint){
   const m = itemMeta(it);
   const click = (idx !== undefined && S.live) ? `onclick="openItem(${idx})"` : '';
   const link = m.q ? `<a class="demo" href="${demoURL(m.q)}" target="_blank" rel="noopener"
                         onclick="event.stopPropagation()">Watch a demo</a>` : '';
-  return `<div class="row ${m.track} ${done?'done':''}" ${click} role="${click?'button':'group'}" ${click?'tabindex="0"':''}>
+  return `<div class="row ${m.track} ${done?'done':''}" ${tint?`style="border-left-color:${tint}"`:''} ${click} role="${click?'button':'group'}" ${click?'tabindex="0"':''}>
     <div class="row-top"><span class="row-name">${esc(m.name)}</span><span class="row-rx">${esc(m.rx)}</span></div>
     ${m.detail ? `<div class="row-detail">${esc(m.detail)}</div>` : ''}
     ${link}
@@ -1144,10 +1183,11 @@ function renderFood(){
   else if(MT.tight) h += `<div class="notice hot">A late start pushes the evening slot close to bedtime. Consider merging it into dinner today rather than eating at 9pm.</div>`;
   SLOTS.forEach(s => {
     const on = ticked.includes(s.id);
-    h += `<div class="row ${on?'done':''}" onclick="toggleSlot('${s.id}')" role="button" tabindex="0">
+    h += `<div class="row ${on?'done':''}" style="border-left-color:${SLOT_TINT[s.id]}"
+      onclick="toggleSlot('${s.id}')" role="button" tabindex="0">
       <div class="row-top"><span class="row-name">${on?'✓ ':''}${esc(s.name)}</span>
         <span class="row-rx">${s.p} g · ${s.kcal} cal</span></div>
-      <div class="row-detail" style="color:var(--left);font-weight:600">${esc(tmap[s.id])}</div>
+      <div class="row-detail" style="color:${SLOT_TINT[s.id]};font-weight:600">${esc(tmap[s.id])}</div>
       <div class="row-detail">${s.items.map(esc).join(' · ')}</div></div>`;
   });
   h += `</div>`;
@@ -1587,7 +1627,7 @@ function renderProgram(){
     if(d.rest){
       h += `<div class="notice good">${esc(d.note)}</div>`;
     } else {
-      d.items.forEach(it => h += rowHTML(it, false));
+      d.items.forEach(it => h += rowHTML(it, false, undefined, DAY_TINT[d.id]));
     }
     h += `</div>`;
   });
